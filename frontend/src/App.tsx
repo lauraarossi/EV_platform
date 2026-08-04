@@ -1,9 +1,8 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
-import Dashboard from './pages/Dashboard'
-import Vehicles from './pages/Vehicles'
-import Trips from './pages/Trips'
-import Charging from './pages/Charging'
+import Garage from './pages/Garage'
+import Charges from './pages/Charges'
+import Stats from './pages/Stats'
 import Compare from './pages/Compare'
 
 export default function App() {
@@ -11,11 +10,12 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Layout />}>
-          <Route index element={<Dashboard />} />
-          <Route path="vehicles" element={<Vehicles />} />
-          <Route path="trips" element={<Trips />} />
-          <Route path="charging" element={<Charging />} />
+          {/* Logging is the thing you do most, so it is the landing page. */}
+          <Route index element={<Charges />} />
+          <Route path="garage" element={<Garage />} />
+          <Route path="stats" element={<Stats />} />
           <Route path="compare" element={<Compare />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -1,11 +1,12 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import ThemeToggle from './ThemeToggle'
 
+// Ordered as the workflow runs: set up a car, log charges, read the numbers,
+// then compare. '/' stays the Charges route since logging is the frequent task.
 const navItems = [
-  { to: '/', label: 'Dashboard' },
-  { to: '/vehicles', label: 'Vehicles' },
-  { to: '/trips', label: 'Trips' },
-  { to: '/charging', label: 'Charging' },
+  { to: '/garage', label: 'Garage' },
+  { to: '/', label: 'Charges' },
+  { to: '/stats', label: 'Stats' },
   { to: '/compare', label: 'vs Petrol' },
 ]
 

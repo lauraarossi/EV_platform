@@ -39,5 +39,11 @@ class Vehicle(Base, TimestampMixin):
 
     is_comparison_vehicle: Mapped[bool] = mapped_column(default=False)
 
-    trips: Mapped[list["Trip"]] = relationship(back_populates="vehicle")
-    charging_sessions: Mapped[list["ChargingSession"]] = relationship(back_populates="vehicle")
+    nickname: Mapped[str | None] = mapped_column(String(100))
+    # Remote URL rather than an upload: PaaS filesystems are ephemeral, so
+    # storing bytes locally would lose the image on every redeploy.
+    image_url: Mapped[str | None] = mapped_column(String(500))
+
+    charging_sessions: Mapped[list["ChargingSession"]] = relationship(
+        back_populates="vehicle", cascade="all, delete-orphan"
+    )
