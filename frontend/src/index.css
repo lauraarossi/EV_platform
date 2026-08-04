@@ -1,8 +1,225 @@
 @import "tailwindcss";
 
+/* Theme is class-driven so the toggle can beat the OS preference in both
+   directions. `.dark` is stamped on <html> by useTheme. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------------------
+   Semantic tokens. Dark is the default identity; light is a deliberate
+   inverse, not an automatic flip. Chart series colours are NOT brand colours:
+   blue/purple are too close to separate under colour-vision deficiency, so
+   they stay decorative and data encoding uses the hue-diverse set below.
+   --------------------------------------------------------------------------- */
+:root {
+  /* light mode */
+  --plane: #f2f6fb;
+  --plane-2: #e6eef8;
+  /* Kept well below opaque: glass only reads as glass if the gradient behind
+     it actually shows through. A near-solid white fill just looks like paper. */
+  --surface: rgb(255 255 255 / 0.40);
+  --surface-solid: #ffffff;
+  --surface-raised: rgb(255 255 255 / 0.58);
+  --border: rgb(11 11 20 / 0.10);
+  --border-strong: rgb(11 11 20 / 0.16);
+
+  --ink: #0b0b14;
+  --ink-2: #4b5169;
+  --ink-3: #767c94;
+
+  --accent: #2563eb;
+  --accent-2: #059669;
+  --accent-3: #0891b2;
+  --accent-ink: #ffffff;
+  --glow: rgb(37 99 235 / 0.18);
+
+  /* validated categorical series (light steps) */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+
+  --good: #0ca30c;
+  --warning: #fab219;
+  --critical: #d03b3b;
+
+  --shadow-glass: 0 8px 32px rgb(11 11 20 / 0.08), 0 2px 8px rgb(11 11 20 / 0.04);
+  --blur: 16px;
+}
+
+.dark {
+  --plane: #08080f;
+  --plane-2: #0d0f1a;
+  --surface: rgb(255 255 255 / 0.045);
+  --surface-solid: #0f1018;
+  --surface-raised: rgb(255 255 255 / 0.07);
+  --border: rgb(255 255 255 / 0.10);
+  --border-strong: rgb(255 255 255 / 0.18);
+
+  --ink: #ffffff;
+  --ink-2: #a8adc4;
+  --ink-3: #6f7590;
+
+  --accent: #4d8dff;
+  --accent-2: #34d399;
+  --accent-3: #22d3ee;
+  --accent-ink: #05060c;
+  --glow: rgb(77 141 255 / 0.30);
+
+  /* validated categorical series (dark steps) */
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+
+  --good: #0ca30c;
+  --warning: #fab219;
+  --critical: #d03b3b;
+
+  --shadow-glass: 0 8px 32px rgb(0 0 0 / 0.55), 0 2px 8px rgb(0 0 0 / 0.35);
+}
+
+/* Expose tokens as Tailwind utilities (`bg-surface`, `text-ink-2`, …).
+   `inline` keeps the var reference so theme swaps apply live. */
+@theme inline {
+  --color-plane: var(--plane);
+  --color-plane-2: var(--plane-2);
+  --color-surface: var(--surface);
+  --color-surface-solid: var(--surface-solid);
+  --color-surface-raised: var(--surface-raised);
+  --color-edge: var(--border);
+  --color-edge-strong: var(--border-strong);
+
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-accent-3: var(--accent-3);
+  --color-accent-ink: var(--accent-ink);
+
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+
+  --color-good: var(--good);
+  --color-warning: var(--warning);
+  --color-critical: var(--critical);
+}
+
+/* --------------------------------------------------------------------------- */
+
+html {
+  color-scheme: light;
+  background: var(--plane);
+}
+html.dark {
+  color-scheme: dark;
+}
+
+/* The ambient gradient field lives on <body> itself. A separate fixed layer at
+   negative z-index does NOT work here: body's own opaque background paints
+   after negative-z-index children and hides them. */
 body {
   margin: 0;
-  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  min-height: 100svh;
+  color: var(--ink);
+  background-color: var(--plane);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  /* green → cyan → blue, so the field reads as one green/blue spectrum */
+  background-image:
+    radial-gradient(70vw 60vh at 12% -10%, color-mix(in oklab, var(--accent-2) 62%, transparent), transparent 66%),
+    radial-gradient(60vw 55vh at 90% -2%, color-mix(in oklab, var(--accent-3) 58%, transparent), transparent 64%),
+    radial-gradient(85vw 55vh at 55% 104%, color-mix(in oklab, var(--accent) 48%, transparent), transparent 66%);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.dark body,
+html.dark body {
+  background-image:
+    radial-gradient(70vw 60vh at 12% -10%, color-mix(in oklab, var(--accent-2) 55%, transparent), transparent 62%),
+    radial-gradient(60vw 55vh at 90% -2%, color-mix(in oklab, var(--accent-3) 45%, transparent), transparent 60%),
+    radial-gradient(85vw 55vh at 55% 104%, color-mix(in oklab, var(--accent) 52%, transparent), transparent 62%);
+}
+
+@layer components {
+  /* The core glass panel. */
+  .glass {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(var(--blur)) saturate(180%);
+    -webkit-backdrop-filter: blur(var(--blur)) saturate(180%);
+    box-shadow: var(--shadow-glass);
+  }
+
+  /* Specular top edge — what sells the material as glass rather than a tint. */
+  .glass-sheen {
+    position: relative;
+    overflow: hidden;
+  }
+  .glass-sheen::before {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, var(--ink) 28%, transparent),
+      transparent
+    );
+  }
+
+  .glass-hover {
+    transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+  }
+  .glass-hover:hover {
+    border-color: var(--border-strong);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-glass), 0 0 0 1px var(--glow), 0 12px 40px var(--glow);
+  }
+
+  .gradient-text {
+    background: linear-gradient(120deg, var(--accent-2), var(--accent-3) 50%, var(--accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Data readouts align in columns, so tabular figures. */
+  .readout {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
+  .btn-primary {
+    background: linear-gradient(120deg, var(--accent-2), var(--accent-3) 60%, var(--accent));
+    color: var(--accent-ink);
+    border: 1px solid transparent;
+    transition: filter 160ms ease, box-shadow 160ms ease;
+  }
+  .btn-primary:hover {
+    filter: brightness(1.08);
+    box-shadow: 0 6px 24px var(--glow);
+  }
+
+  .focus-ring:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .glass-hover:hover {
+    transform: none;
+  }
 }

@@ -22,6 +22,8 @@ services:
       # Overrides the host-oriented value in .env: inside the compose network
       # Postgres is reachable at service name `db`, not localhost.
       DATABASE_URL: postgresql+psycopg://evuser:evpass@db:5432/ev_platform
+    # Dev-only override: the image's default CMD is the production one.
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     ports:
       - "8000:8000"
     depends_on:
