@@ -16,10 +16,10 @@ class ChargingSession(Base, TimestampMixin):
     __tablename__ = "charging_sessions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    vehicle_id: Mapped[int] = mapped_column(ForeignKey("vehicles.id"))
-    trip_id: Mapped[int | None] = mapped_column(ForeignKey("trips.id"), nullable=True)
+    vehicle_id: Mapped[int] = mapped_column(ForeignKey("vehicles.id"), index=True)
+    trip_id: Mapped[int | None] = mapped_column(ForeignKey("trips.id"), nullable=True, index=True)
 
-    date: Mapped[datetime.date] = mapped_column(Date)
+    date: Mapped[datetime.date] = mapped_column(Date, index=True)
     time_of_day: Mapped[datetime.time | None] = mapped_column(Time)
 
     kwh_charged: Mapped[float] = mapped_column(Float)

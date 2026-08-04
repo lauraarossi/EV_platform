@@ -8,8 +8,8 @@ class Trip(Base, TimestampMixin):
     __tablename__ = "trips"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    vehicle_id: Mapped[int] = mapped_column(ForeignKey("vehicles.id"))
-    date: Mapped[datetime.date] = mapped_column(Date)
+    vehicle_id: Mapped[int] = mapped_column(ForeignKey("vehicles.id"), index=True)
+    date: Mapped[datetime.date] = mapped_column(Date, index=True)
 
     distance_km: Mapped[float] = mapped_column(Float)
     average_speed_kmh: Mapped[float | None] = mapped_column(Float)
