@@ -1,21 +1,17 @@
 import { useState } from 'react'
 import { getVehicles } from '../api/vehicles'
-import { getSummary } from '../api/stats'
+import { getComparison } from '../api/stats'
 import { useAsync } from '../hooks/useAsync'
 import PageHeader from '../components/PageHeader'
 import GlassCard from '../components/GlassCard'
 import StatTile from '../components/StatTile'
-import { Field, TextInput, Select } from '../components/form'
+import { Field, Select } from '../components/form'
 import { Loading, ErrorState, EmptyState } from '../components/States'
-
-// Placeholder until a live Irish fuel-price feed is wired in.
-const DEFAULT_PETROL_PRICE = 1.79
 
 const fmt = (n: number, d = 2) =>
   n.toLocaleString('en-IE', { minimumFractionDigits: d, maximumFractionDigits: d })
 
 export default function Compare() {
-  const [pricePerLitre, setPricePerLitre] = useState(DEFAULT_PETROL_PRICE)
   const [evId, setEvId] = useState<number | null>(null)
   const [petrolId, setPetrolId] = useState<number | null>(null)
 
@@ -26,16 +22,19 @@ export default function Compare() {
       v => v.is_comparison_vehicle && v.fuel_consumption_l_per_100km != null
     )
     const selectedEv = evId ?? owned[0]?.id ?? null
-    const summary = selectedEv ? await getSummary(selectedEv) : null
-    return { owned, petrols, selectedEv, summary }
-  }, [evId])
+    const selectedPetrol = petrolId ?? petrols[0]?.id ?? null
 
-  if (loading) return <Loading label="Working out the difference…" />
+    const comparison =
+      selectedEv && selectedPetrol ? await getComparison(selectedEv, selectedPetrol) : null
+
+    return { owned, petrols, selectedEv, selectedPetrol, comparison }
+  }, [evId, petrolId])
+
+  if (loading) return <Loading label="Pricing your driving both ways…" />
   if (error) return <ErrorState message={error} onRetry={reload} />
   if (!data) return null
 
-  const { owned, petrols, selectedEv, summary } = data
-  const ev = owned.find(v => v.id === selectedEv)
+  const { owned, petrols, selectedEv, selectedPetrol, comparison } = data
 
   if (owned.length === 0) {
     return (
@@ -58,11 +57,7 @@ export default function Compare() {
     )
   }
 
-  const petrol = petrols.find(v => v.id === petrolId) ?? petrols[0]
-  const lPer100 = petrol.fuel_consumption_l_per_100km!
-
-  const distance = summary?.total_distance_km ?? 0
-  if (!summary || distance === 0) {
+  if (!comparison || comparison.distance_km === 0) {
     return (
       <>
         <PageHeader title="vs Petrol" subtitle="What the same driving would have cost in petrol." />
@@ -74,23 +69,18 @@ export default function Compare() {
     )
   }
 
-  // Only the cost attributed to measured intervals is comparable, since that is
-  // the same driving the petrol figure is priced against.
-  const evCost = (summary.avg_cost_per_100km ?? 0) / 100 * distance
-  const petrolCost = distance / 100 * lPer100 * pricePerLitre
-  const litres = distance / 100 * lPer100
-  const saving = petrolCost - evCost
-  const saved = saving >= 0
+  const saved = comparison.saving >= 0
+  const priced = comparison.intervals.filter(i => i.petrol_cost != null)
 
   return (
     <>
       <PageHeader
         title="vs Petrol"
-        subtitle={`${distance.toLocaleString()} km of real driving, priced both ways.`}
+        subtitle={`${comparison.distance_km.toLocaleString()} km of real driving, priced at the pump rates that applied at the time.`}
       />
 
       <GlassCard className="mb-4 p-5">
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Your EV">
             <Select value={selectedEv ?? ''} onChange={e => setEvId(Number(e.target.value))}>
               {owned.map(v => (
@@ -99,7 +89,7 @@ export default function Compare() {
             </Select>
           </Field>
           <Field label="Compared to">
-            <Select value={petrol.id} onChange={e => setPetrolId(Number(e.target.value))}>
+            <Select value={selectedPetrol ?? ''} onChange={e => setPetrolId(Number(e.target.value))}>
               {petrols.map(v => (
                 <option key={v.id} value={v.id}>
                   {v.make} {v.model} — {v.fuel_consumption_l_per_100km} L/100km
@@ -107,21 +97,47 @@ export default function Compare() {
               ))}
             </Select>
           </Field>
-          <Field label="Petrol price (€/litre)" hint="Manual for now — a live feed is on the roadmap">
-            <TextInput
-              type="number" step="0.01" min="0"
-              value={pricePerLitre}
-              onChange={e => setPricePerLitre(Number(e.target.value) || 0)}
-            />
-          </Field>
         </div>
+        <p className="mt-3 text-xs text-ink-3">
+          Petrol prices come from the EU Weekly Oil Bulletin (Irish national average, updated
+          weekly). Add your own prices to override them for a date or city.
+        </p>
       </GlassCard>
 
+      {comparison.unpriced_intervals > 0 && (
+        <GlassCard className="mb-4 p-4">
+          <div className="flex items-start gap-2.5">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2" strokeLinecap="round" className="mt-0.5 shrink-0">
+              <path d="M12 9v4M12 17v.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6A2 2 0 0 0 22 18L13.7 3.9a2 2 0 0 0-3.4 0z" />
+            </svg>
+            <p className="text-sm text-ink-2">
+              {comparison.unpriced_intervals} interval
+              {comparison.unpriced_intervals === 1 ? ' has' : 's have'} no petrol price for that
+              date, so {comparison.unpriced_intervals === 1 ? 'it is' : 'they are'} left out of the
+              total. Import the Oil Bulletin from the API, or add prices manually.
+            </p>
+          </div>
+        </GlassCard>
+      )}
+
       <section aria-label="Cost comparison" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile label="You paid" value={`€${fmt(evCost)}`} hint={ev ? ev.nickname || `${ev.make} ${ev.model}` : 'Charging'} />
-        <StatTile label="Petrol would cost" value={`€${fmt(petrolCost)}`} hint={`${fmt(litres, 1)} litres`} accent="var(--series-2)" />
-        <StatTile label="EV per 100km" value={`€${fmt(summary.avg_cost_per_100km ?? 0)}`} accent="var(--accent-3)" />
-        <StatTile label="Petrol per 100km" value={`€${fmt(lPer100 * pricePerLitre)}`} accent="var(--series-2)" />
+        <StatTile label="You paid" value={`€${fmt(comparison.ev_cost)}`} hint="Charging" />
+        <StatTile
+          label="Petrol would cost"
+          value={`€${fmt(comparison.petrol_cost)}`}
+          hint={`${fmt(comparison.litres, 1)} litres`}
+          accent="var(--series-2)"
+        />
+        <StatTile
+          label="EV per 100km"
+          value={comparison.ev_cost_per_100km != null ? `€${fmt(comparison.ev_cost_per_100km)}` : '—'}
+          accent="var(--accent-3)"
+        />
+        <StatTile
+          label="Petrol per 100km"
+          value={comparison.petrol_cost_per_100km != null ? `€${fmt(comparison.petrol_cost_per_100km)}` : '—'}
+          accent="var(--series-2)"
+        />
       </section>
 
       <GlassCard className="mt-4 p-6">
@@ -138,18 +154,59 @@ export default function Compare() {
             <p className="text-sm font-medium text-ink">
               {saved ? 'Cheaper to drive electric' : 'Petrol would have been cheaper'}
             </p>
-            <p className="readout mt-1 text-3xl font-semibold text-ink">€{fmt(Math.abs(saving))}</p>
+            <p className="readout mt-1 text-3xl font-semibold text-ink">
+              €{fmt(Math.abs(comparison.saving))}
+            </p>
             <p className="mt-1 text-sm text-ink-2">
-              {saved ? 'saved' : 'extra'} over {distance.toLocaleString()} km
-              {petrolCost > 0 && ` · ${fmt(Math.abs(saving / petrolCost) * 100, 0)}% ${saved ? 'less' : 'more'}`}
+              {saved ? 'saved' : 'extra'} over {comparison.distance_km.toLocaleString()} km
+              {comparison.petrol_cost > 0 &&
+                ` · ${fmt(Math.abs(comparison.saving / comparison.petrol_cost) * 100, 0)}% ${saved ? 'less' : 'more'}`}
             </p>
             <p className="mt-3 text-xs text-ink-3">
-              Based on charges logged against measured distance. The first charge is excluded — it
-              paid for driving from before you started logging.
+              Against a {comparison.comparison_vehicle} at {comparison.l_per_100km} L/100km. The
+              first charge is excluded — it paid for driving from before you started logging.
             </p>
           </div>
         </div>
       </GlassCard>
+
+      {priced.length > 0 && (
+        <GlassCard className="mt-3">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[44rem] text-sm">
+              <caption className="px-4 pt-4 text-left text-sm font-semibold text-ink">
+                Priced interval by interval
+                <span className="ml-2 text-xs font-normal text-ink-3">
+                  each stretch at the pump price of the week it ended
+                </span>
+              </caption>
+              <thead>
+                <tr className="border-b border-edge text-left">
+                  {['Period', 'Distance', 'Litres', 'Price/L', 'Priced as of', 'Petrol cost'].map(h => (
+                    <th key={h} className="px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-ink-3">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {comparison.intervals.map(i => (
+                  <tr key={`${i.start_date}-${i.end_date}`} className="border-b border-edge last:border-0">
+                    <td className="readout px-4 py-3 text-ink-2">{i.start_date} → {i.end_date}</td>
+                    <td className="readout px-4 py-3 text-ink">{i.distance_km.toLocaleString()} km</td>
+                    <td className="readout px-4 py-3 text-ink-2">{fmt(i.litres, 1)}</td>
+                    <td className="readout px-4 py-3 text-ink">
+                      {i.price_per_litre != null ? `€${fmt(i.price_per_litre, 3)}` : '—'}
+                    </td>
+                    <td className="readout px-4 py-3 text-ink-3">{i.price_as_of ?? '—'}</td>
+                    <td className="readout px-4 py-3 font-medium text-ink">
+                      {i.petrol_cost != null ? `€${fmt(i.petrol_cost)}` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </GlassCard>
+      )}
     </>
   )
 }

@@ -79,6 +79,33 @@ export interface Summary {
   anomalies: string[]
 }
 
+/** One interval of driving, costed as petrol at the price that applied then. */
+export interface PricedInterval {
+  start_date: string
+  end_date: string
+  distance_km: number
+  litres: number
+  price_per_litre: number | null
+  petrol_cost: number | null
+  price_as_of: string | null
+  price_is_estimate: boolean
+}
+
+export interface Comparison {
+  distance_km: number
+  ev_cost: number
+  petrol_cost: number
+  saving: number
+  litres: number
+  ev_cost_per_100km: number | null
+  petrol_cost_per_100km: number | null
+  used_fallback_price: boolean
+  unpriced_intervals: number
+  comparison_vehicle: string
+  l_per_100km: number
+  intervals: PricedInterval[]
+}
+
 export const CHARGER_LABEL: Record<ChargerType, string> = {
   ac_home: 'Home AC',
   ac_public: 'Public AC',

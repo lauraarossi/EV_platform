@@ -28,3 +28,6 @@ postgres_data/
 
 # Alembic (keep versions, ignore pyc)
 backend/alembic/versions/__pycache__/
+
+# local dev server logs/pids
+.dev-logs/

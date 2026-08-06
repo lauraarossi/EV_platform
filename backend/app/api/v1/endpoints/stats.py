@@ -1,10 +1,10 @@
 from dataclasses import asdict
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.charging_session import ChargingSession
 from app.models.vehicle import Vehicle
-from app.services import metrics
+from app.services import fuel_pricing, metrics
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 
@@ -30,3 +30,60 @@ def vehicle_intervals(vehicle_id: int, db: Session = Depends(get_db)):
     vehicle, sessions = _load(db, vehicle_id)
     intervals, anomalies = metrics.build_intervals(sessions, vehicle)
     return {"intervals": [asdict(i) for i in intervals], "anomalies": anomalies}
+
+
+@router.get("/vehicles/{vehicle_id}/compare")
+def compare_to_petrol(
+    vehicle_id: int,
+    comparison_vehicle_id: int,
+    fallback_price_per_litre: float | None = Query(
+        default=None,
+        description="Used only for intervals with no stored price for that date",
+    ),
+    db: Session = Depends(get_db),
+):
+    """Price the same driving as petrol, interval by interval.
+
+    Each stretch of driving is costed at the pump price that applied *at the
+    time*, not today's — pricing a year of history at this week's rate would be
+    wrong in whichever direction fuel has moved.
+    """
+    vehicle, sessions = _load(db, vehicle_id)
+
+    petrol = db.get(Vehicle, comparison_vehicle_id)
+    if not petrol:
+        raise HTTPException(status_code=404, detail="Comparison vehicle not found")
+    if not petrol.fuel_consumption_l_per_100km:
+        raise HTTPException(
+            status_code=400,
+            detail="Comparison vehicle needs a fuel consumption figure (L/100km)",
+        )
+
+    intervals, _ = metrics.build_intervals(sessions, vehicle)
+    priced, petrol_total, used_fallback = fuel_pricing.price_intervals(
+        db,
+        intervals,
+        l_per_100km=petrol.fuel_consumption_l_per_100km,
+        fallback_price=fallback_price_per_litre,
+    )
+
+    # Only charges that close an interval are comparable: the first charge paid
+    # for driving that predates the log, and has no distance to price against.
+    ev_total = round(sum(i.cost or 0 for i in intervals), 2)
+    distance = round(sum(i.distance_km for i in intervals), 2)
+    unpriced = sum(1 for p in priced if p.petrol_cost is None)
+
+    return {
+        "distance_km": distance,
+        "ev_cost": ev_total,
+        "petrol_cost": petrol_total,
+        "saving": round(petrol_total - ev_total, 2),
+        "litres": round(sum(p.litres for p in priced), 2),
+        "ev_cost_per_100km": round(ev_total / distance * 100, 2) if distance else None,
+        "petrol_cost_per_100km": round(petrol_total / distance * 100, 2) if distance else None,
+        "used_fallback_price": used_fallback,
+        "unpriced_intervals": unpriced,
+        "comparison_vehicle": f"{petrol.make} {petrol.model}",
+        "l_per_100km": petrol.fuel_consumption_l_per_100km,
+        "intervals": [asdict(p) for p in priced],
+    }

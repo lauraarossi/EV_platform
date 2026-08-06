@@ -7,25 +7,13 @@ the wrong answer for an EV.
 """
 import datetime
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
-from app.models import Base, Vehicle, ChargingSession, ChargerType, DrivingMix
+from app.models import Vehicle, ChargingSession, ChargerType, DrivingMix
 from app.services import metrics
 
 BATTERY_KWH = 52.0
 
-
-@pytest.fixture
-def db():
-    engine = create_engine(
-        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
-    )
-    Base.metadata.create_all(engine)
-    session = sessionmaker(bind=engine)()
-    yield session
-    session.close()
+# `db` comes from tests/conftest.py
 
 
 def make_vehicle(db, battery=BATTERY_KWH):
