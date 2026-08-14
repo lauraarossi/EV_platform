@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import ThemeToggle from './ThemeToggle'
+import AccountMenu from './AccountMenu'
 
 // Ordered as the workflow runs: set up a car, log charges, read the numbers,
 // then compare. '/' stays the Charges route since logging is the frequent task.
@@ -65,8 +66,9 @@ export default function Layout() {
               ))}
             </nav>
 
-            <div className="ml-auto md:ml-2">
+            <div className="ml-auto flex items-center gap-2 md:ml-2">
               <ThemeToggle />
+              <AccountMenu />
             </div>
           </div>
         </header>

@@ -9,3 +9,6 @@ python-dotenv
 httpx
 pytest
 openpyxl
+bcrypt
+pyjwt
+email-validator

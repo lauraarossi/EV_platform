@@ -1,4 +1,5 @@
 from app.models.base import Base
+from app.models.user import User
 from app.models.vehicle import Vehicle, FuelType, Transmission
 from app.models.charging_session import ChargingSession, ChargerType, DrivingMix
 from app.models.fuel_price import FuelPrice, FuelKind, PriceSource
@@ -7,6 +8,7 @@ from app.models.catalog import CatalogVehicle, CatalogSource
 
 __all__ = [
     "Base",
+    "User",
     "Vehicle",
     "FuelType",
     "Transmission",

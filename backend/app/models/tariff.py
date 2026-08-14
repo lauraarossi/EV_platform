@@ -16,6 +16,9 @@ class ElectricityTariff(Base, TimestampMixin):
     __tablename__ = "electricity_tariffs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
     name: Mapped[str] = mapped_column(String(120))
     supplier: Mapped[str | None] = mapped_column(String(120))
 
@@ -26,6 +29,7 @@ class ElectricityTariff(Base, TimestampMixin):
     standing_charge_per_day: Mapped[float | None] = mapped_column(Float)
     currency: Mapped[str] = mapped_column(String(3), default="EUR")
 
+    user: Mapped["User"] = relationship(back_populates="tariffs")
     rates: Mapped[list["TariffRate"]] = relationship(
         back_populates="tariff", cascade="all, delete-orphan", order_by="TariffRate.start_time"
     )

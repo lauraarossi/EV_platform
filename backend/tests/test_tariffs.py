@@ -4,6 +4,7 @@ import datetime
 import pytest
 
 from app.models import ElectricityTariff, TariffRate
+from tests.conftest import ensure_user
 from app.schemas.tariff import TariffCreate
 from app.services import tariffs as svc
 
@@ -14,7 +15,8 @@ T = datetime.time
 def make_tariff(db, name, effective_from, effective_to=None, bands=None):
     bands = bands or [("Day", T(8, 0), T(23, 0), 0.35), ("Night", T(23, 0), T(8, 0), 0.17)]
     t = ElectricityTariff(
-        name=name, effective_from=effective_from, effective_to=effective_to, currency="EUR"
+        name=name, effective_from=effective_from, effective_to=effective_to, currency="EUR",
+        user_id=ensure_user(db).id,
     )
     t.rates = [
         TariffRate(name=n, start_time=s, end_time=e, price_per_kwh=p) for n, s, e, p in bands
@@ -39,21 +41,21 @@ def make_tariff(db, name, effective_from, effective_to=None, bands=None):
 )
 def test_night_band_wraps_midnight(db, at, expected):
     make_tariff(db, "Night Saver", D(2026, 1, 1))
-    _, rate = svc.rate_for(db, D(2026, 6, 1), at)
+    _, rate = svc.rate_for(db, ensure_user(db).id, D(2026, 6, 1), at)
     assert rate.name == expected
 
 
 def test_flat_tariff_covers_every_hour(db):
     make_tariff(db, "Flat", D(2026, 1, 1), bands=[("Standard", T(0, 0), T(0, 0), 0.30)])
     for at in (T(0, 0), T(12, 0), T(23, 59)):
-        _, rate = svc.rate_for(db, D(2026, 6, 1), at)
+        _, rate = svc.rate_for(db, ensure_user(db).id, D(2026, 6, 1), at)
         assert rate.price_per_kwh == pytest.approx(0.30)
 
 
 def test_missing_time_assumes_cheapest_band(db):
     """Better to under-assume than to invent a peak-rate charge."""
     make_tariff(db, "Night Saver", D(2026, 1, 1))
-    _, rate = svc.rate_for(db, D(2026, 6, 1), None)
+    _, rate = svc.rate_for(db, ensure_user(db).id, D(2026, 6, 1), None)
     assert rate.name == "Night"
 
 
@@ -64,26 +66,26 @@ def test_lookup_picks_the_version_in_force(db):
                 bands=[("Flat", T(0, 0), T(0, 0), 0.28)])
     make_tariff(db, "New", D(2026, 1, 1), bands=[("Flat", T(0, 0), T(0, 0), 0.34)])
 
-    assert svc.tariff_on(db, D(2025, 6, 1)).name == "Old"
-    assert svc.tariff_on(db, D(2026, 6, 1)).name == "New"
+    assert svc.tariff_on(db, ensure_user(db).id, D(2025, 6, 1)).name == "Old"
+    assert svc.tariff_on(db, ensure_user(db).id, D(2026, 6, 1)).name == "New"
 
 
 def test_no_tariff_before_the_first_version(db):
     make_tariff(db, "Only", D(2026, 1, 1))
-    assert svc.tariff_on(db, D(2025, 12, 31)) is None
-    assert svc.rate_for(db, D(2025, 12, 31), T(9, 0)) is None
+    assert svc.tariff_on(db, ensure_user(db).id, D(2025, 12, 31)) is None
+    assert svc.rate_for(db, ensure_user(db).id, D(2025, 12, 31), T(9, 0)) is None
 
 
 def test_open_ended_version_covers_the_future(db):
     make_tariff(db, "Current", D(2026, 1, 1))
-    assert svc.tariff_on(db, D(2030, 1, 1)).name == "Current"
+    assert svc.tariff_on(db, ensure_user(db).id, D(2030, 1, 1)).name == "Current"
 
 
 def test_adding_a_version_closes_the_previous_one(db):
     old = make_tariff(db, "Old", D(2025, 1, 1))
     assert old.effective_to is None
 
-    svc.close_open_versions(db, D(2026, 1, 1))
+    svc.close_open_versions(db, ensure_user(db).id, D(2026, 1, 1))
     db.commit()
 
     assert old.effective_to == D(2025, 12, 31)
@@ -93,7 +95,7 @@ def test_closing_does_not_touch_the_new_version_itself(db):
     old = make_tariff(db, "Old", D(2025, 1, 1))
     new = make_tariff(db, "New", D(2026, 1, 1))
 
-    svc.close_open_versions(db, D(2026, 1, 1), exclude_id=new.id)
+    svc.close_open_versions(db, ensure_user(db).id, D(2026, 1, 1), exclude_id=new.id)
     db.commit()
 
     assert old.effective_to == D(2025, 12, 31)
@@ -106,8 +108,8 @@ def test_historical_charge_keeps_its_original_rate(db):
                 bands=[("Flat", T(0, 0), T(0, 0), 0.28)])
     make_tariff(db, "New", D(2026, 1, 1), bands=[("Flat", T(0, 0), T(0, 0), 0.40)])
 
-    _, old_rate = svc.rate_for(db, D(2025, 6, 1), T(23, 30))
-    _, new_rate = svc.rate_for(db, D(2026, 6, 1), T(23, 30))
+    _, old_rate = svc.rate_for(db, ensure_user(db).id, D(2025, 6, 1), T(23, 30))
+    _, new_rate = svc.rate_for(db, ensure_user(db).id, D(2026, 6, 1), T(23, 30))
 
     assert old_rate.price_per_kwh == pytest.approx(0.28)
     assert new_rate.price_per_kwh == pytest.approx(0.40)

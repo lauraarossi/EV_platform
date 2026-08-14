@@ -9,6 +9,7 @@ import datetime
 import pytest
 
 from app.models import Vehicle, ChargingSession, ChargerType, DrivingMix
+from tests.conftest import ensure_user
 from app.services import metrics
 
 BATTERY_KWH = 52.0
@@ -17,7 +18,9 @@ BATTERY_KWH = 52.0
 
 
 def make_vehicle(db, battery=BATTERY_KWH):
-    v = Vehicle(make="Renault", model="R4 E-Tech", year=2025, battery_capacity_kwh=battery)
+    owner = ensure_user(db)
+    v = Vehicle(make="Renault", model="R4 E-Tech", year=2025, battery_capacity_kwh=battery,
+                user_id=owner.id)
     db.add(v)
     db.commit()
     return v

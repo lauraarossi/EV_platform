@@ -1,6 +1,6 @@
 import enum
 import datetime
-from sqlalchemy import String, Float, Integer, Enum, DateTime
+from sqlalchemy import String, Float, Integer, Enum, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin
 
@@ -32,6 +32,9 @@ class Vehicle(Base, TimestampMixin):
     __tablename__ = "vehicles"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
     make: Mapped[str] = mapped_column(String(100))
     model: Mapped[str] = mapped_column(String(100))
     trim: Mapped[str | None] = mapped_column(String(100))
@@ -62,6 +65,7 @@ class Vehicle(Base, TimestampMixin):
     # storing bytes locally would lose the image on every redeploy.
     image_url: Mapped[str | None] = mapped_column(String(500))
 
+    user: Mapped["User"] = relationship(back_populates="vehicles")
     charging_sessions: Mapped[list["ChargingSession"]] = relationship(
         back_populates="vehicle", cascade="all, delete-orphan"
     )

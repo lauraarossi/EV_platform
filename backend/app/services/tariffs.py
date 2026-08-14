@@ -10,11 +10,12 @@ from sqlalchemy.orm import Session
 from app.models.tariff import ElectricityTariff, TariffRate
 
 
-def tariff_on(db: Session, day: datetime.date) -> ElectricityTariff | None:
-    """The tariff version in force on `day`."""
+def tariff_on(db: Session, user_id: int, day: datetime.date) -> ElectricityTariff | None:
+    """The tariff version in force on `day`, for one person."""
     return db.scalars(
         select(ElectricityTariff)
         .where(
+            ElectricityTariff.user_id == user_id,
             ElectricityTariff.effective_from <= day,
             (ElectricityTariff.effective_to.is_(None)) | (ElectricityTariff.effective_to >= day),
         )
@@ -35,10 +36,10 @@ def band_covers(rate: TariffRate, at: datetime.time) -> bool:
 
 
 def rate_for(
-    db: Session, day: datetime.date, at: datetime.time | None
+    db: Session, user_id: int, day: datetime.date, at: datetime.time | None
 ) -> tuple[ElectricityTariff, TariffRate] | None:
     """The tariff and price band applying at a given date and time."""
-    tariff = tariff_on(db, day)
+    tariff = tariff_on(db, user_id, day)
     if not tariff or not tariff.rates:
         return None
 
@@ -53,13 +54,16 @@ def rate_for(
     return None
 
 
-def close_open_versions(db: Session, new_from: datetime.date, exclude_id: int | None = None) -> None:
+def close_open_versions(
+    db: Session, user_id: int, new_from: datetime.date, exclude_id: int | None = None
+) -> None:
     """Close any still-open tariff that starts before a newly added one.
 
     Versions are meant to tile the timeline without overlapping, so adding a
     version starting today ends yesterday's.
     """
     stmt = select(ElectricityTariff).where(
+        ElectricityTariff.user_id == user_id,
         ElectricityTariff.effective_to.is_(None),
         ElectricityTariff.effective_from < new_from,
     )

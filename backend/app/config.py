@@ -12,6 +12,30 @@ class Settings(BaseSettings):
     # Comma-separated list of allowed browser origins for the SPA.
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
+    # A blunt shared password in front of everything. Superseded by real
+    # accounts, but kept for shielding a preview deployment. Empty = off.
+    app_username: str = "eevie"
+    app_password: str = ""
+
+    # --- accounts ---------------------------------------------------------
+    # Sessions are signed with SECRET_KEY. Changing it logs everyone out,
+    # which is the intended way to revoke every session at once.
+    session_cookie_name: str = "eevie_session"
+    session_days: int = 30
+    # Cookies are only marked Secure outside development, or they would never
+    # be sent over plain http on localhost.
+    @property
+    def cookie_secure(self) -> bool:
+        return self.environment.lower() != "development"
+
+    # Sign-in with Google. Leave the client id empty to hide the option
+    # entirely rather than showing a button that cannot work.
+    google_client_id: str = ""
+    google_client_secret: str = ""
+
+    # Set to false once you have an account, to stop anyone else signing up.
+    allow_registration: bool = True
+
     openweather_api_key: str = ""
     fuel_price_api_key: str = ""
 

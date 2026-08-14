@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.router import router
+from app.auth import BasicAuthMiddleware
 from app.config import settings
 
 app = FastAPI(
@@ -13,6 +14,10 @@ app = FastAPI(
     description="Track EV usage, charging costs, and compare against petrol equivalents",
     version="0.1.0",
 )
+
+# No-op unless APP_PASSWORD is set. Added before CORS so an unauthenticated
+# request is refused without doing any further work.
+app.add_middleware(BasicAuthMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
