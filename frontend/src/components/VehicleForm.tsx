@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react'
-import type { Vehicle, VehicleInput } from '../types'
+import type { CatalogVehicle, Vehicle, VehicleInput } from '../types'
+import { TRANSMISSION_LABEL } from '../types'
 import { Field, TextInput, Select, FormError } from './form'
+import CatalogPicker from './CatalogPicker'
 
 function describeError(e: unknown): string {
   const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
@@ -35,6 +37,7 @@ export default function VehicleForm({
     nickname: existing?.nickname ?? '',
     image_url: existing?.image_url ?? '',
     fuel_type: existing?.fuel_type ?? 'electric',
+    transmission: existing?.transmission ?? '',
     is_comparison_vehicle: existing?.is_comparison_vehicle ?? false,
     battery_capacity_kwh: existing?.battery_capacity_kwh != null ? String(existing.battery_capacity_kwh) : '',
     onboard_charger_kw: existing?.onboard_charger_kw != null ? String(existing.onboard_charger_kw) : '',
@@ -54,6 +57,34 @@ export default function VehicleForm({
 
   const isEv = f.fuel_type === 'electric'
 
+  /** Fill the form from a catalogue entry. Every field stays editable, and
+   *  anything the catalogue lacks (charging specs, for instance) is left as
+   *  typed rather than being blanked. */
+  const applyCatalogEntry = (c: CatalogVehicle) => {
+    const str = (v: number | null | undefined) => (v == null ? '' : String(v))
+    setF(prev => ({
+      ...prev,
+      make: c.make,
+      // The catalogue's variant name carries the trim, e.g. "…Techno 52".
+      model: c.model,
+      trim: c.variant.replace(`${c.make} ${c.model}`, '').trim() || prev.trim,
+      year: c.model_year ? String(c.model_year) : prev.year,
+      fuel_type: c.fuel_type,
+      transmission: c.transmission ?? prev.transmission,
+      image_url: c.image_url ?? prev.image_url,
+      battery_capacity_kwh: str(c.battery_capacity_kwh) || prev.battery_capacity_kwh,
+      onboard_charger_kw: str(c.onboard_charger_kw) || prev.onboard_charger_kw,
+      wltp_range_km: str(c.wltp_range_km) || prev.wltp_range_km,
+      engine_size_cc: str(c.engine_size_cc) || prev.engine_size_cc,
+      fuel_consumption_l_per_100km:
+        str(c.fuel_consumption_l_per_100km) || prev.fuel_consumption_l_per_100km,
+      horsepower: str(c.horsepower) || prev.horsepower,
+      zero_to_100_seconds: str(c.zero_to_100_seconds) || prev.zero_to_100_seconds,
+      top_speed_kmh: str(c.top_speed_kmh) || prev.top_speed_kmh,
+      kerb_weight_kg: str(c.kerb_weight_kg) || prev.kerb_weight_kg,
+    }))
+  }
+
   async function handle(e: FormEvent) {
     e.preventDefault()
     setError(null)
@@ -65,6 +96,7 @@ export default function VehicleForm({
         trim: f.trim || null,
         year: Number(f.year),
         fuel_type: f.fuel_type as VehicleInput['fuel_type'],
+        transmission: (f.transmission || null) as VehicleInput['transmission'],
         nickname: f.nickname || null,
         image_url: f.image_url || null,
         battery_capacity_kwh: isEv ? num(f.battery_capacity_kwh) : null,
@@ -88,6 +120,19 @@ export default function VehicleForm({
     <form onSubmit={handle} className="space-y-5">
       <FormError message={error} />
 
+      {/* Offered only when adding: when editing, the fields already hold your
+          own corrections and a prefill would quietly overwrite them.
+          Reg lookup is hidden for now — a plate only proves year and county.
+          RegLookupField and /catalog/lookup/registration remain in place for
+          when a provider can give make and model. */}
+      {!existing && (
+        <CatalogPicker
+          fuelType={f.fuel_type as VehicleInput['fuel_type']}
+          onPick={applyCatalogEntry}
+          onClear={() => {}}
+        />
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Field label="Make" required>
           <TextInput value={f.make} onChange={set('make')} required placeholder="Renault" />
@@ -103,22 +148,27 @@ export default function VehicleForm({
         </Field>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Nickname" hint="Shown instead of make/model where space is tight">
-          <TextInput value={f.nickname} onChange={set('nickname')} placeholder="The wee blue one" />
-        </Field>
-        <Field label="Photo URL" hint="A link — uploads aren't supported yet">
-          <TextInput type="url" value={f.image_url} onChange={set('image_url')} placeholder="https://…" />
-        </Field>
-      </div>
+      {/* No photo field: image_url is still carried on the model and gets set
+          when the catalogue supplies one, it just isn't hand-entered. */}
+      <Field label="Nickname" hint="Shown instead of make/model where space is tight">
+        <TextInput value={f.nickname} onChange={set('nickname')} placeholder="The wee blue one" />
+      </Field>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Fuel type" required>
           <Select value={f.fuel_type} onChange={set('fuel_type')}>
             <option value="electric">Electric</option>
             <option value="petrol">Petrol</option>
             <option value="diesel">Diesel</option>
             <option value="hybrid">Hybrid</option>
+          </Select>
+        </Field>
+        <Field label="Transmission">
+          <Select value={f.transmission} onChange={set('transmission')}>
+            <option value="">—</option>
+            {Object.entries(TRANSMISSION_LABEL).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
           </Select>
         </Field>
         <div className="flex items-end">

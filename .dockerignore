@@ -1,0 +1,11 @@
+# Keep the build context small and never ship local secrets or state.
+.git
+.dev-logs
+**/node_modules
+**/dist
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.env
+backend/tests
+*.md

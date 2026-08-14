@@ -1,5 +1,13 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import health, vehicles, charging, stats, fuel_prices, tariffs
+from app.api.v1.endpoints import (
+    health,
+    vehicles,
+    charging,
+    stats,
+    fuel_prices,
+    tariffs,
+    catalog,
+)
 
 router = APIRouter(prefix="/api/v1")
 
@@ -9,3 +17,4 @@ router.include_router(charging.router)
 router.include_router(stats.router)
 router.include_router(fuel_prices.router)
 router.include_router(tariffs.router)
+router.include_router(catalog.router)

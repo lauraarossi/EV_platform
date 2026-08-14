@@ -1,4 +1,13 @@
 export type FuelType = 'electric' | 'petrol' | 'diesel' | 'hybrid'
+export type Transmission = 'single_speed' | 'manual' | 'automatic' | 'cvt' | 'dual_clutch'
+
+export const TRANSMISSION_LABEL: Record<Transmission, string> = {
+  single_speed: 'Single-speed',
+  manual: 'Manual',
+  automatic: 'Automatic',
+  cvt: 'CVT',
+  dual_clutch: 'Dual-clutch',
+}
 export type ChargerType = 'ac_home' | 'ac_public' | 'dc_rapid' | 'dc_ultra'
 export type DrivingMix = 'city' | 'mixed' | 'motorway'
 
@@ -9,6 +18,7 @@ export interface Vehicle {
   trim?: string | null
   year: number
   fuel_type: FuelType
+  transmission?: Transmission | null
   nickname?: string | null
   image_url?: string | null
   battery_capacity_kwh?: number | null
@@ -77,6 +87,48 @@ export interface Summary {
   avg_price_per_kwh: number | null
   latest_odometer_km: number | null
   anomalies: string[]
+}
+
+/** A reference specification used to prefill a vehicle you own. */
+export interface CatalogVehicle {
+  id: string
+  source: 'evdb' | 'manual'
+  source_name: string | null
+  source_url: string | null
+  licence: string | null
+  make: string
+  model: string
+  variant: string
+  model_year: number | null
+  fuel_type: FuelType
+  transmission: Transmission | null
+  battery_capacity_kwh: number | null
+  battery_usable_kwh: number | null
+  onboard_charger_kw: number | null
+  dc_charge_power_kw: number | null
+  wltp_range_km: number | null
+  consumption_wltp_kwh_100km: number | null
+  consumption_real_world_kwh_100km: number | null
+  engine_size_cc: number | null
+  fuel_consumption_l_per_100km: number | null
+  horsepower: number | null
+  zero_to_100_seconds: number | null
+  top_speed_kmh: number | null
+  kerb_weight_kg: number | null
+  body_style: string | null
+  image_url: string | null
+  data_quality: string | null
+}
+
+export interface CatalogMake {
+  make: string
+  model_count: number
+}
+
+export interface CatalogModel {
+  make: string
+  model: string
+  variant_count: number
 }
 
 /** One interval of driving, costed as petrol at the price that applied then. */

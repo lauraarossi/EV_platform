@@ -12,6 +12,15 @@ class FuelType(str, enum.Enum):
     hybrid = "hybrid"
 
 
+class Transmission(str, enum.Enum):
+    # Most EVs have no gearbox to speak of, so this is their sensible default.
+    single_speed = "single_speed"
+    manual = "manual"
+    automatic = "automatic"
+    cvt = "cvt"
+    dual_clutch = "dual_clutch"
+
+
 class Vehicle(Base, TimestampMixin):
     __tablename__ = "vehicles"
 
@@ -21,6 +30,7 @@ class Vehicle(Base, TimestampMixin):
     trim: Mapped[str | None] = mapped_column(String(100))
     year: Mapped[int] = mapped_column(Integer)
     fuel_type: Mapped[FuelType] = mapped_column(Enum(FuelType), default=FuelType.electric)
+    transmission: Mapped[Transmission | None] = mapped_column(Enum(Transmission))
 
     # EV-specific
     battery_capacity_kwh: Mapped[float | None] = mapped_column(Float)

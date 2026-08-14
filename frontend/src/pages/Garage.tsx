@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { getVehicles, createVehicle, updateVehicle, deleteVehicle } from '../api/vehicles'
 import { getSummary } from '../api/stats'
 import type { Summary, Vehicle, VehicleInput } from '../types'
+import { TRANSMISSION_LABEL } from '../types'
 import { useAsync } from '../hooks/useAsync'
 import PageHeader from '../components/PageHeader'
 import GlassCard from '../components/GlassCard'
@@ -105,6 +106,9 @@ function VehicleCard({
             </>
           )}
           {v.horsepower != null && <Spec label="Power" value={`${v.horsepower} hp`} />}
+          {v.transmission && (
+            <Spec label="Transmission" value={TRANSMISSION_LABEL[v.transmission]} />
+          )}
           {v.zero_to_100_seconds != null && <Spec label="0–100" value={`${v.zero_to_100_seconds} s`} />}
           {v.top_speed_kmh != null && <Spec label="Top speed" value={`${v.top_speed_kmh} km/h`} />}
           {v.kerb_weight_kg != null && <Spec label="Weight" value={`${v.kerb_weight_kg} kg`} />}
