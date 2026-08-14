@@ -131,7 +131,7 @@ def to_catalog_values(row: dict) -> dict:
     values["horsepower"] = _hp(row.get("total_power_kw"))
     values["fuel_type"] = FuelType.electric
     # Effectively every EV in the set is single-speed; the user can override.
-    values["transmission"] = Transmission.single_speed
+    values["transmission"] = Transmission.single_speed.value
     values["top_speed_kmh"] = int(row["top_speed_kmh"]) if row.get("top_speed_kmh") else None
     values["kerb_weight_kg"] = int(row["kerb_weight_kg"]) if row.get("kerb_weight_kg") else None
     return values

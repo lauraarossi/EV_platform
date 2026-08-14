@@ -13,7 +13,14 @@ class FuelType(str, enum.Enum):
 
 
 class Transmission(str, enum.Enum):
-    # Most EVs have no gearbox to speak of, so this is their sensible default.
+    """Common transmissions, offered as suggestions rather than enforced.
+
+    The column is free text: no catalogue we ingest records a transmission at
+    all, so anything stored here is typed by a person, and real gearboxes are
+    messier than a fixed list ("7-speed DSG", "e-CVT", "single-speed reduction
+    gear"). These values just populate the dropdown.
+    """
+
     single_speed = "single_speed"
     manual = "manual"
     automatic = "automatic"
@@ -30,7 +37,8 @@ class Vehicle(Base, TimestampMixin):
     trim: Mapped[str | None] = mapped_column(String(100))
     year: Mapped[int] = mapped_column(Integer)
     fuel_type: Mapped[FuelType] = mapped_column(Enum(FuelType), default=FuelType.electric)
-    transmission: Mapped[Transmission | None] = mapped_column(Enum(Transmission))
+    # Free text, not an enum: see Transmission's docstring.
+    transmission: Mapped[str | None] = mapped_column(String(60))
 
     # EV-specific
     battery_capacity_kwh: Mapped[float | None] = mapped_column(Float)

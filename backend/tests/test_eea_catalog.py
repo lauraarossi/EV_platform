@@ -41,7 +41,7 @@ def test_electric_rows_convert_wh_per_km(db):
     row = db.query(CatalogVehicle).one()
     assert row.fuel_type == FuelType.electric
     assert row.consumption_real_world_kwh_100km == 15.6   # 156 Wh/km
-    assert row.transmission == Transmission.single_speed
+    assert row.transmission == Transmission.single_speed.value
     assert row.engine_size_cc is None
 
 

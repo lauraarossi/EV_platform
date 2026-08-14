@@ -14,15 +14,16 @@ import { Field, Select } from './form'
  * it, and every field stays editable afterwards.
  */
 export default function CatalogPicker({
-  fuelType,
   onPick,
   onClear,
 }: {
-  /** Narrows the list to match the fuel type chosen on the form. */
-  fuelType?: FuelType
   onPick: (entry: CatalogVehicle) => void
   onClear: () => void
 }) {
+  // Its own filter rather than the form's fuel type: that defaulted to
+  // Electric, so petrol and diesel cars looked missing until you knew to
+  // change it first. Empty means every fuel.
+  const [fuelType, setFuelType] = useState<FuelType | ''>('')
   const [makes, setMakes] = useState<CatalogMake[]>([])
   const [models, setModels] = useState<CatalogModel[]>([])
   const [variants, setVariants] = useState<CatalogVehicle[]>([])
@@ -37,7 +38,7 @@ export default function CatalogPicker({
   useEffect(() => {
     setLoading(true)
     setMake('')
-    getMakes(fuelType)
+    getMakes(fuelType || undefined)
       .then(setMakes)
       .catch(() => setError('Catalogue unavailable'))
       .finally(() => setLoading(false))
@@ -49,8 +50,8 @@ export default function CatalogPicker({
     setModel('')
     setVariantId('')
     if (!make) return
-    getModels(make, fuelType).then(setModels).catch(() => setError('Could not load models'))
-  }, [make])
+    getModels(make, fuelType || undefined).then(setModels).catch(() => setError('Could not load models'))
+  }, [make, fuelType])
 
   useEffect(() => {
     setVariants([])
@@ -104,13 +105,26 @@ export default function CatalogPicker({
         )}
       </div>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Field label="Fuel">
+          <Select
+            value={fuelType}
+            onChange={e => setFuelType(e.target.value as FuelType | '')}
+          >
+            <option value="">All</option>
+            <option value="electric">Electric</option>
+            <option value="petrol">Petrol</option>
+            <option value="diesel">Diesel</option>
+            <option value="hybrid">Hybrid</option>
+          </Select>
+        </Field>
+
         <Field label="Make">
           <Select value={make} onChange={e => setMake(e.target.value)} disabled={loading}>
             <option value="">{loading ? 'Loading…' : 'Select…'}</option>
             {makes.map(m => (
               <option key={m.make} value={m.make}>
-                {m.make} ({m.model_count})
+                {m.make}
               </option>
             ))}
           </Select>
@@ -121,7 +135,7 @@ export default function CatalogPicker({
             <option value="">{make ? 'Select…' : '—'}</option>
             {models.map(m => (
               <option key={m.model} value={m.model}>
-                {m.model} ({m.variant_count})
+                {m.model}
               </option>
             ))}
           </Select>

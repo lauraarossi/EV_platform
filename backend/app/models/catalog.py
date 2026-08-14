@@ -39,7 +39,8 @@ class CatalogVehicle(Base, TimestampMixin):
     model_year: Mapped[int | None] = mapped_column(Integer, index=True)
 
     fuel_type: Mapped[FuelType] = mapped_column(Enum(FuelType), index=True)
-    transmission: Mapped[Transmission | None] = mapped_column(Enum(Transmission))
+    # Free text to match vehicles.transmission; no source records this.
+    transmission: Mapped[str | None] = mapped_column(String(60))
 
     # EV
     battery_capacity_kwh: Mapped[float | None] = mapped_column(Float)

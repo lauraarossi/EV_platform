@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from app.models.catalog import CatalogSource
-from app.models.vehicle import FuelType, Transmission
+from app.models.vehicle import FuelType
 
 
 class CatalogMake(BaseModel):
@@ -27,7 +27,7 @@ class CatalogVehicleRead(BaseModel):
     model_year: int | None
 
     fuel_type: FuelType
-    transmission: Transmission | None
+    transmission: str | None
 
     battery_capacity_kwh: float | None
     battery_usable_kwh: float | None

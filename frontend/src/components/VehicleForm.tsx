@@ -36,7 +36,7 @@ export default function VehicleForm({
     year: existing ? String(existing.year) : String(new Date().getFullYear()),
     nickname: existing?.nickname ?? '',
     image_url: existing?.image_url ?? '',
-    fuel_type: existing?.fuel_type ?? 'electric',
+    fuel_type: existing?.fuel_type ?? '',
     transmission: existing?.transmission ?? '',
     is_comparison_vehicle: existing?.is_comparison_vehicle ?? false,
     battery_capacity_kwh: existing?.battery_capacity_kwh != null ? String(existing.battery_capacity_kwh) : '',
@@ -126,11 +126,7 @@ export default function VehicleForm({
           RegLookupField and /catalog/lookup/registration remain in place for
           when a provider can give make and model. */}
       {!existing && (
-        <CatalogPicker
-          fuelType={f.fuel_type as VehicleInput['fuel_type']}
-          onPick={applyCatalogEntry}
-          onClear={() => {}}
-        />
+        <CatalogPicker onPick={applyCatalogEntry} onClear={() => {}} />
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -156,20 +152,28 @@ export default function VehicleForm({
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Fuel type" required>
-          <Select value={f.fuel_type} onChange={set('fuel_type')}>
+          <Select value={f.fuel_type} onChange={set('fuel_type')} required>
+            <option value="">Select…</option>
             <option value="electric">Electric</option>
             <option value="petrol">Petrol</option>
             <option value="diesel">Diesel</option>
             <option value="hybrid">Hybrid</option>
           </Select>
         </Field>
-        <Field label="Transmission">
-          <Select value={f.transmission} onChange={set('transmission')}>
-            <option value="">—</option>
-            {Object.entries(TRANSMISSION_LABEL).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
+        {/* Free text with suggestions: no catalogue records a transmission,
+            and real gearboxes don't fit a fixed list ("7-speed DSG"). */}
+        <Field label="Transmission" hint="Pick one or type your own">
+          <TextInput
+            list="transmission-options"
+            value={f.transmission}
+            onChange={set('transmission')}
+            placeholder="e.g. Automatic"
+          />
+          <datalist id="transmission-options">
+            {Object.values(TRANSMISSION_LABEL).map(label => (
+              <option key={label} value={label} />
             ))}
-          </Select>
+          </datalist>
         </Field>
         <div className="flex items-end">
           <label className="flex cursor-pointer items-center gap-2.5 pb-2">
@@ -189,7 +193,7 @@ export default function VehicleForm({
         </div>
       </div>
 
-      {isEv ? (
+      {f.fuel_type === '' ? null : isEv ? (
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Battery (kWh)" hint="Needed for exact efficiency">
             <TextInput type="number" step="0.1" min="0" value={f.battery_capacity_kwh} onChange={set('battery_capacity_kwh')} placeholder="52" />

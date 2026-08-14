@@ -156,7 +156,7 @@ def to_catalog_values(row: dict, country: str) -> dict | None:
         "fuel_type": fuel,
         # EVs are single-speed; for combustion the dataset says nothing, so
         # leave it blank rather than assert a gearbox it never recorded.
-        "transmission": Transmission.single_speed if is_electric else None,
+        "transmission": Transmission.single_speed.value if is_electric else None,
         "engine_size_cc": int(row["cc"]) if row.get("cc") else None,
         "fuel_consumption_l_per_100km": float(row["l100"]) if row.get("l100") else None,
         "horsepower": round(float(kw) * KW_TO_HP) if kw else None,

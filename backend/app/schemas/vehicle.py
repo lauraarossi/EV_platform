@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from app.models.vehicle import FuelType, Transmission
+from app.models.vehicle import FuelType
 
 
 class VehicleBase(BaseModel):
@@ -8,7 +8,7 @@ class VehicleBase(BaseModel):
     trim: str | None = None
     year: int
     fuel_type: FuelType = FuelType.electric
-    transmission: Transmission | None = None
+    transmission: str | None = Field(default=None, max_length=60)
     nickname: str | None = None
     image_url: str | None = None
 

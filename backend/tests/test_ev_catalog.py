@@ -92,7 +92,7 @@ def test_defaults_to_electric_and_single_speed(db):
     ev_catalog.ingest(db, db_bytes=build_snapshot())
     techno = db.get(CatalogVehicle, "renault-4-e-tech-techno-52-2025")
     assert techno.fuel_type == FuelType.electric
-    assert techno.transmission == Transmission.single_speed
+    assert techno.transmission == Transmission.single_speed.value
 
 
 def test_records_attribution(db):
