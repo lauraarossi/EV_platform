@@ -8,11 +8,15 @@ from fastapi.staticfiles import StaticFiles
 from app.api.v1.router import router
 from app.auth import BasicAuthMiddleware
 from app.config import settings
+from app.docs import router as docs_router
 
 app = FastAPI(
     title="Eevie API",
     description="Track EV usage, charging costs, and compare against petrol equivalents",
     version="0.1.0",
+    # Replaced by a themed version in app/docs.py that follows the app's
+    # light/dark preference.
+    docs_url=None,
 )
 
 # No-op unless APP_PASSWORD is set. Added before CORS so an unauthenticated
@@ -28,6 +32,7 @@ app.add_middleware(
 )
 
 # API routes are registered first so they always win over the SPA catch-all below.
+app.include_router(docs_router)
 app.include_router(router)
 
 

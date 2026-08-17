@@ -65,3 +65,27 @@ def test_protects_the_frontend_too_not_just_the_api(client, protected):
     """Serving the SPA from the same process means one password covers both."""
     assert client.get("/garage").status_code == 401
     assert client.get("/docs").status_code == 401
+
+
+# --- themed docs -------------------------------------------------------------
+
+def test_docs_page_is_served(client):
+    r = client.get("/docs")
+    assert r.status_code == 200
+    assert "swagger-ui" in r.text
+
+
+def test_docs_carries_the_theme_toggle_and_shared_preference(client):
+    body = client.get("/docs").text
+    assert 'id="eevie-theme"' in body
+    # Same storage key as the SPA, so switching in one place switches both.
+    assert "ev-platform-theme" in body
+
+
+def test_docs_sends_cookies_with_try_it_out(client):
+    """Without withCredentials every Execute would come back 401."""
+    assert "withCredentials: true" in client.get("/docs").text
+
+
+def test_docs_is_behind_basic_auth_when_enabled(client, protected):
+    assert client.get("/docs").status_code == 401
