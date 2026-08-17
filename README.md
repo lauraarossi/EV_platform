@@ -116,6 +116,42 @@ anything.
 
 ---
 
+## Signing in with Google
+
+The browser gets a signed ID token from Google and the server verifies it
+against Google's published keys — checking the signature, the issuer, the
+expiry, and that it was issued **for this app**. Without that last check a
+token minted for any other site would be accepted here.
+
+There is no code exchange, so there is no client secret to keep. Only the
+client id is needed, and it is public.
+
+1. In Google Cloud Console → **APIs & Services → Credentials**, open your
+   OAuth 2.0 Client ID of type *Web application*.
+2. Under **Authorised JavaScript origins**, add every origin the app is served
+   from. Google refuses to render the button on an origin it does not know:
+
+   ```
+   http://localhost:5173        # local dev, where Vite serves the page
+   https://your-app.up.railway.app
+   ```
+
+   **Authorised redirect URIs can stay empty** — the button hands the
+   credential back in a callback rather than redirecting.
+3. On the **OAuth consent screen**, while the app is in *Testing* only accounts
+   listed as test users can sign in; add your own address, or publish it.
+4. Set the variable, locally in `backend/.env` and on the host:
+
+   ```bash
+   GOOGLE_CLIENT_ID=xxxxx.apps.googleusercontent.com
+   ```
+
+Leaving it empty hides the button entirely rather than showing one that cannot
+work. Signing in with Google against an address that already has a password
+account links the two rather than making a second one.
+
+---
+
 ## Admin console
 
 Accounts have one of two roles, `user` or `admin`. Admin covers the shared

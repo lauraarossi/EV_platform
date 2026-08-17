@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     # Sign-in with Google. Leave the client id empty to hide the option
     # entirely rather than showing a button that cannot work.
     google_client_id: str = ""
+    # Unused, and deliberately so. The browser gets a signed ID token from
+    # Google and the server verifies it against Google's public keys — there is
+    # no code exchange, so there is no secret to keep. Kept only because a
+    # server-side flow would need one.
     google_client_secret: str = ""
 
     # Set to false once you have an account, to stop anyone else signing up.
