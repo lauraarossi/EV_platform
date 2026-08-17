@@ -13,6 +13,8 @@ export const getComparison = (
   vehicleId: number,
   comparisonVehicleId: number,
   fallback?: { perLitre?: number; perKwh?: number },
+  /** 0 = your car as entered, 1 = as your log actually measured it. */
+  measuredWeight = 0,
 ) =>
   api
     .get<Comparison>(`/stats/vehicles/${vehicleId}/compare`, {
@@ -20,6 +22,7 @@ export const getComparison = (
         comparison_vehicle_id: comparisonVehicleId,
         ...(fallback?.perLitre != null ? { fallback_price_per_litre: fallback.perLitre } : {}),
         ...(fallback?.perKwh != null ? { fallback_price_per_kwh: fallback.perKwh } : {}),
+        ...(measuredWeight > 0 ? { measured_weight: measuredWeight } : {}),
       },
     })
     .then(r => r.data)

@@ -305,3 +305,82 @@ def test_emissions_are_reported_without_a_price(db):
 
     assert result.alternative_cost == 0.0 and result.unpriced_intervals == 1
     assert result.alternative_co2_kg > 0
+
+
+# --- weighing the entered figure against the achieved one ---------------------
+#
+# The entered figure keeps both cars comparable; the measured one describes
+# your actual driving. Which matters is a judgement, so it is a control rather
+# than a decision made here.
+
+def test_by_default_nothing_is_measured_in(db):
+    mine = petrol(db, 7.0)
+    theirs = petrol(db, 7.0)
+    intervals = [FakeInterval("2026-06-01", "2026-06-20", 500.0, cost=90.0, litres_added=45.0)]
+
+    result = comparison.compare(db, ensure_user(db).id, intervals, theirs,
+                                driven_vehicle=mine, measured_consumption=9.0)
+
+    assert result.your_basis == 7.0
+    assert result.measured_weight == 0.0
+    assert result.saving == 0.0          # still strictly like-for-like
+
+
+@pytest.mark.parametrize("weight,expected", [(0.0, 7.0), (0.5, 8.0), (1.0, 9.0)])
+def test_the_slider_moves_between_the_two(db, weight, expected):
+    mine = petrol(db, 7.0)
+    theirs = petrol(db, 7.0)
+    intervals = [FakeInterval("2026-06-01", "2026-06-20", 500.0, cost=90.0, litres_added=45.0)]
+
+    result = comparison.compare(db, ensure_user(db).id, intervals, theirs,
+                                driven_vehicle=mine, measured_consumption=9.0,
+                                measured_weight=weight)
+    assert result.your_basis == expected
+
+
+def test_both_ends_are_reported_so_the_control_can_be_labelled(db):
+    mine = petrol(db, 7.0)
+    theirs = petrol(db, 6.0)
+    intervals = [FakeInterval("2026-06-01", "2026-06-20", 500.0, cost=90.0, litres_added=45.0)]
+
+    result = comparison.compare(db, ensure_user(db).id, intervals, theirs,
+                                driven_vehicle=mine, measured_consumption=9.0,
+                                measured_weight=0.25)
+
+    assert result.your_basis_quoted == 7.0
+    assert result.your_basis_measured == 9.0
+    assert result.your_basis == 7.5
+    assert result.measured_weight == 0.25
+
+
+def test_with_nothing_measured_the_weight_is_inert(db):
+    """A car with too little logged to derive a figure keeps the entered one,
+    rather than the slider quietly doing nothing while claiming otherwise."""
+    mine = petrol(db, 7.0)
+    theirs = petrol(db, 7.0)
+
+    result = comparison.compare(db, ensure_user(db).id, [
+        FakeInterval("2026-06-01", "2026-06-20", 500.0, cost=90.0, litres_added=45.0),
+    ], theirs, driven_vehicle=mine, measured_consumption=None, measured_weight=1.0)
+
+    assert result.your_basis == 7.0
+    assert result.your_basis_measured is None
+    assert result.measured_weight == 0.0
+
+
+def test_measuring_in_changes_cost_and_co2_together(db):
+    mine = petrol(db, 7.0)
+    theirs = petrol(db, 7.0)
+    intervals = [FakeInterval("2026-06-01", "2026-06-20", 1000.0, cost=180.0, litres_added=90.0)]
+
+    typed = comparison.compare(db, ensure_user(db).id, intervals, theirs,
+                               driven_vehicle=mine, measured_consumption=9.0)
+    real = comparison.compare(db, ensure_user(db).id, intervals, theirs,
+                              driven_vehicle=mine, measured_consumption=9.0,
+                              measured_weight=1.0)
+
+    assert typed.saving == 0.0
+    # Your car now burns 90 L against its 70, so the other looks better by both
+    # measures at once — and the page has to say the two are no longer alike.
+    assert real.saving < 0 and real.co2_saving_kg < 0
+    assert real.actual_co2_kg > typed.actual_co2_kg

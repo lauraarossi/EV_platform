@@ -5,6 +5,7 @@ from app.api.v1.endpoints.vehicles import owned_vehicle
 from app.db.session import get_db
 from app.models.fuel_event import FuelEvent
 from app.models.user import User
+from app.models.vehicle import FuelType
 from app.security import get_current_user
 from app.services import comparison, metrics
 
@@ -50,6 +51,14 @@ def compare_vehicles(
         default=None,
         description="Used only when no electricity tariff covers that date",
     ),
+    measured_weight: float = Query(
+        default=0.0, ge=0, le=1,
+        description=(
+            "How far your car's consumption slides from the figure you entered "
+            "(0) towards the one your log actually shows (1). 0 keeps both cars "
+            "strictly like-for-like."
+        ),
+    ),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -63,6 +72,14 @@ def compare_vehicles(
     alternative = owned_vehicle(db, user, comparison_vehicle_id)
 
     intervals, _ = metrics.build_intervals(events, vehicle)
+    # Offered as the other end of the slider, and reported either way so the
+    # page can show what the entered figure is being weighed against.
+    summary = metrics.summarise(events, vehicle)
+    measured = (
+        summary.avg_efficiency_kwh_per_100km
+        if vehicle.fuel_type == FuelType.electric
+        else summary.avg_consumption_l_per_100km
+    )
 
     try:
         result = comparison.compare(
@@ -71,6 +88,8 @@ def compare_vehicles(
             intervals,
             alternative,
             driven_vehicle=vehicle,
+            measured_consumption=measured,
+            measured_weight=measured_weight,
             fallback_price_per_litre=fallback_price_per_litre,
             fallback_price_per_kwh=fallback_price_per_kwh,
         )

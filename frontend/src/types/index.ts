@@ -201,6 +201,10 @@ export interface Comparison {
   /** Real money from the receipts, kept apart from the like-for-like sum. */
   actual_spend: number
   your_basis: number
+  /** The two ends of the basis control: as entered, and as measured. */
+  your_basis_quoted: number
+  your_basis_measured: number | null
+  measured_weight: number
   your_quantity: number
   actual_co2_kg: number | null
   alternative_co2_kg: number

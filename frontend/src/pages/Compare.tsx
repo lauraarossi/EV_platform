@@ -3,6 +3,7 @@ import { getVehicles } from '../api/vehicles'
 import { getComparison } from '../api/stats'
 import { FUEL_LABEL, eventNoun, takesElectricity } from '../fuel'
 import { useAsync } from '../hooks/useAsync'
+import { useDebounced } from '../hooks/useDebounced'
 import { useUnits } from '../hooks/useUnits'
 import PageHeader from '../components/PageHeader'
 import GlassCard from '../components/GlassCard'
@@ -26,6 +27,10 @@ export default function Compare() {
   const { units } = useUnits()
   const [mineId, setMineId] = useState<number | null>(null)
   const [otherId, setOtherId] = useState<number | null>(null)
+  // How far your car's consumption sits from the figure you entered towards
+  // the one your log shows. Debounced so dragging is one request, not fifty.
+  const [weight, setWeight] = useState(0)
+  const settledWeight = useDebounced(weight, 250)
 
   const { data, error, loading, reload } = useAsync(async () => {
     const vehicles = await getVehicles()
@@ -41,10 +46,12 @@ export default function Compare() {
     const selectedOther = otherId ?? alternatives[0]?.id ?? null
 
     const comparison =
-      selectedMine && selectedOther ? await getComparison(selectedMine, selectedOther) : null
+      selectedMine && selectedOther
+        ? await getComparison(selectedMine, selectedOther, undefined, settledWeight)
+        : null
 
     return { owned, alternatives, selectedMine, selectedOther, comparison }
-  }, [mineId, otherId])
+  }, [mineId, otherId, settledWeight])
 
   if (loading) return <Loading label="Pricing your driving both ways…" />
   if (error) return <ErrorState message={error} onRetry={reload} />
@@ -132,6 +139,59 @@ export default function Compare() {
             </Select>
           </Field>
         </div>
+        {comparison.your_basis_measured != null && (
+          <div className="mt-4 border-t border-edge pt-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <label htmlFor="basis" className="text-[11px] uppercase tracking-wider text-ink-3">
+                {yourName}'s consumption
+              </label>
+              <span className="readout text-sm font-medium text-ink">
+                {comparison.your_basis} {comparison.basis_label}
+              </span>
+            </div>
+
+            <input
+              id="basis"
+              type="range" min={0} max={100} step={5}
+              value={Math.round(weight * 100)}
+              onChange={e => setWeight(Number(e.target.value) / 100)}
+              className="focus-ring mt-3 w-full accent-[var(--accent)]"
+            />
+
+            <div className="mt-1 flex justify-between text-xs text-ink-3">
+              <button
+                type="button" onClick={() => setWeight(0)}
+                className="focus-ring rounded px-1 hover:text-ink"
+              >
+                As entered ({comparison.your_basis_quoted})
+              </button>
+              <button
+                type="button" onClick={() => setWeight(1)}
+                className="focus-ring rounded px-1 hover:text-ink"
+              >
+                As measured ({comparison.your_basis_measured})
+              </button>
+            </div>
+
+            <p className="mt-2 text-xs text-ink-3">
+              {weight === 0 ? (
+                <>
+                  Both cars on their entered figures, which is the only way the answer is
+                  strictly about the cars — enter the same figure twice and the difference is
+                  zero.
+                </>
+              ) : (
+                <>
+                  <span style={{ color: 'var(--warning)' }}>Not like-for-like:</span> yours is
+                  judged {weight === 1 ? 'entirely' : 'partly'} on your real driving while the{' '}
+                  {theirName} is still on its quoted figure, which flatters it by whatever your
+                  own car falls short by.
+                </>
+              )}
+            </p>
+          </div>
+        )}
+
         <p className="mt-3 text-xs text-ink-3">
           {sameFuel
             ? `Both cars run on the same thing, so both are priced at what you actually paid per ${comparison.unit_label} — your receipts beat any national average.`

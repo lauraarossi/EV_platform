@@ -68,7 +68,14 @@ class Comparison:
     # What each car is quoted to use, exactly as entered. Both sides of the
     # comparison come from these, so two cars with the same figure compare
     # identically no matter which one is being driven.
+    #
+    # Your car is the one with a second opinion available, since it is the one
+    # with a log behind it. `measured_weight` says how far the figure used
+    # slides from what you entered towards what you actually achieved.
     your_basis: float
+    your_basis_quoted: float
+    your_basis_measured: float | None
+    measured_weight: float
     basis: float
     basis_label: str
 
@@ -172,12 +179,29 @@ def _paid_unit_price(iv) -> float | None:
     return iv.cost / added
 
 
+def blend(quoted: float, measured: float | None, weight: float) -> float:
+    """Slide between the figure entered for a car and the one it achieved.
+
+    Nothing is inferred here — the weight is chosen deliberately, and 0 keeps
+    the comparison strictly like-for-like. At anything above 0 your car is
+    judged on your roads while the other is still on its published figure, so
+    the two stop being directly comparable; that is a reasonable thing to want,
+    but the interface has to say it rather than arrange it quietly.
+    """
+    if measured is None or weight <= 0:
+        return quoted
+    weight = min(weight, 1.0)
+    return round(quoted * (1 - weight) + measured * weight, 2)
+
+
 def compare(
     db: Session,
     user_id: int,
     intervals: list,
     comparison_vehicle: Vehicle,
     driven_vehicle: Vehicle,
+    measured_consumption: float | None = None,
+    measured_weight: float = 0.0,
     country: str = "IE",
     fallback_price_per_litre: float | None = None,
     fallback_price_per_kwh: float | None = None,
@@ -190,8 +214,9 @@ def compare(
     the answer can be read as being about the cars rather than about how the
     numbers were arrived at.
     """
-    your_rate, your_unit, your_unit_label, _ = consumption_of(driven_vehicle)
+    your_quoted, your_unit, your_unit_label, _ = consumption_of(driven_vehicle)
     their_rate, unit, unit_label, basis_label = consumption_of(comparison_vehicle)
+    your_rate = blend(your_quoted, measured_consumption, measured_weight)
 
     # Same *fuel*, not merely the same unit: petrol and diesel are both litres
     # but are bought at different pumps, and have diverged by 20c before now.
@@ -286,6 +311,13 @@ def compare(
         ),
         grid_co2_g_per_kwh=emissions.grid_intensity(),
         your_basis=your_rate,
+        your_basis_quoted=your_quoted,
+        your_basis_measured=(
+            round(measured_consumption, 2) if measured_consumption else None
+        ),
+        measured_weight=(
+            round(min(measured_weight, 1.0), 2) if measured_consumption else 0.0
+        ),
         basis=their_rate,
         basis_label=basis_label,
         actual_spend=spend,
