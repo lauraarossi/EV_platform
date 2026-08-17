@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { getVehicles } from '../api/vehicles'
-import { getComparison } from '../api/stats'
+import { getComparison, getSummary } from '../api/stats'
 import { FUEL_LABEL, eventNoun, takesElectricity } from '../fuel'
 import { useAsync } from '../hooks/useAsync'
 import { useDebounced } from '../hooks/useDebounced'
@@ -31,59 +31,62 @@ export default function Compare() {
   // the one your log shows. Debounced so dragging is one request, not fifty.
   const [weight, setWeight] = useState(0)
   const settledWeight = useDebounced(weight, 250)
+  // Null means "use the first car's logged history". A number is a distance
+  // typed in, which is the only way two Showroom cars can be compared at all.
+  const [distance, setDistance] = useState<number | null>(null)
+  const settledDistance = useDebounced(distance, 400)
 
   const { data, error, loading, reload } = useAsync(async () => {
     const vehicles = await getVehicles()
-    const owned = vehicles.filter(v => v.is_owned)
-    const selectedMine = mineId ?? owned[0]?.id ?? null
-    // Either side can be any car, Garage or Showroom — the only requirement is
-    // the figure the whole estimate rests on, and that it isn't the same car.
+    // Either side can be any car — two from the Garage, two from the Showroom,
+    // or one of each. The only requirement is the consumption figure the whole
+    // estimate rests on, and that the two are not the same car.
     const comparable = (v: (typeof vehicles)[number]) =>
       v.fuel_consumption_l_per_100km != null ||
       v.consumption_kwh_per_100km != null ||
       (v.battery_capacity_kwh != null && v.wltp_range_km != null)
-    const alternatives = vehicles.filter(v => v.id !== selectedMine && comparable(v))
+
+    const candidates = vehicles.filter(comparable)
+    const selectedMine = mineId ?? candidates[0]?.id ?? null
+    const alternatives = candidates.filter(v => v.id !== selectedMine)
     const selectedOther = otherId ?? alternatives[0]?.id ?? null
+
+    // Only a car with a log offers a distance of its own to compare over.
+    const summary = selectedMine ? await getSummary(selectedMine).catch(() => null) : null
+    const loggedKm = summary?.total_distance_km ?? 0
+    // Typed in whatever unit is on display; the API deals only in km.
+    const entered = settledDistance ?? (loggedKm > 0 ? null : 10_000)
+    const useDistance = entered != null ? units.toKm(entered) : undefined
 
     const comparison =
       selectedMine && selectedOther
-        ? await getComparison(selectedMine, selectedOther, undefined, settledWeight)
+        ? await getComparison(
+            selectedMine, selectedOther, undefined, settledWeight, useDistance,
+          ).catch(() => null)
         : null
 
-    return { owned, alternatives, selectedMine, selectedOther, comparison }
-  }, [mineId, otherId, settledWeight])
+    return { candidates, alternatives, selectedMine, selectedOther, comparison, loggedKm }
+  }, [mineId, otherId, settledWeight, settledDistance, units.system])
 
   if (loading) return <Loading label="Pricing your driving both ways…" />
   if (error) return <ErrorState message={error} onRetry={reload} />
   if (!data) return null
 
-  const { owned, alternatives, selectedMine, selectedOther, comparison } = data
+  const { candidates, alternatives, selectedMine, selectedOther, comparison, loggedKm } = data
 
-  if (owned.length === 0) {
+  if (candidates.length < 2) {
     return (
       <>
         <PageHeader title="Compare" subtitle={SUBTITLE} />
         <EmptyState
-          title="Add your car first"
-          body="Then add another car to compare it against — whatever it runs on."
+          title={candidates.length === 0 ? 'Nothing to compare yet' : 'One car isn’t a comparison'}
+          body="Any two cars will do — both from the Garage, both from the Showroom, or one of each. Each needs a consumption figure: L/100km for petrol or diesel, kWh/100km for an electric one."
         />
       </>
     )
   }
 
-  if (alternatives.length === 0) {
-    return (
-      <>
-        <PageHeader title="Compare" subtitle={SUBTITLE} />
-        <EmptyState
-          title="No comparison car set up"
-          body="Add another car — in the Garage or the Showroom — with a consumption figure: L/100km for petrol or diesel, kWh/100km for an electric one."
-        />
-      </>
-    )
-  }
-
-  const mine = owned.find(v => v.id === selectedMine) ?? owned[0]
+  const mine = candidates.find(v => v.id === selectedMine) ?? candidates[0]
 
   if (!comparison || comparison.distance_km === 0) {
     return (
@@ -119,16 +122,17 @@ export default function Compare() {
 
       <GlassCard className="mb-4 p-5">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Your car">
+          <Field label="First car">
             <Select value={selectedMine ?? ''} onChange={e => setMineId(Number(e.target.value))}>
-              {owned.map(v => (
+              {candidates.map(v => (
                 <option key={v.id} value={v.id}>
                   {v.nickname || `${v.make} ${v.model}`} — {FUEL_LABEL[v.fuel_type]}
+                  {v.is_owned ? ' · Garage' : ' · Showroom'}
                 </option>
               ))}
             </Select>
           </Field>
-          <Field label="Compared to">
+          <Field label="Second car">
             <Select value={selectedOther ?? ''} onChange={e => setOtherId(Number(e.target.value))}>
               {alternatives.map(v => (
                 <option key={v.id} value={v.id}>
@@ -139,6 +143,48 @@ export default function Compare() {
             </Select>
           </Field>
         </div>
+        <div className="mt-4 border-t border-edge pt-4">
+          <p className="text-[11px] uppercase tracking-wider text-ink-3">Compared over</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {loggedKm > 0 && (
+              <button
+                type="button"
+                onClick={() => setDistance(null)}
+                aria-pressed={distance === null}
+                className="focus-ring rounded-lg px-3 py-1.5 text-xs font-medium"
+                style={
+                  distance === null
+                    ? {
+                        background: 'color-mix(in oklab, var(--accent) 18%, transparent)',
+                        border: '1px solid color-mix(in oklab, var(--accent) 35%, transparent)',
+                        color: 'var(--ink)',
+                      }
+                    : { border: '1px solid var(--border)', color: 'var(--ink-3)' }
+                }
+              >
+                {mine.nickname || mine.model}'s log ({units.distance(loggedKm)})
+              </button>
+            )}
+            <label className="flex items-center gap-2 text-xs text-ink-3">
+              <span>{loggedKm > 0 ? 'or' : 'Distance'}</span>
+              <input
+                type="number" min={1} step={100}
+                value={distance ?? ''}
+                placeholder="10000"
+                onChange={e => setDistance(e.target.value === '' ? null : Number(e.target.value))}
+                className="focus-ring w-28 rounded-lg border border-edge bg-transparent px-2 py-1.5 text-sm text-ink"
+              />
+              <span>{units.distanceUnit}</span>
+            </label>
+          </div>
+          {loggedKm === 0 && (
+            <p className="mt-2 text-xs text-ink-3">
+              Neither car has anything logged, so there is no history to measure — pick a
+              distance and both are costed over it at today's rates.
+            </p>
+          )}
+        </div>
+
         {comparison.your_basis_measured != null && (
           <div className="mt-4 border-t border-edge pt-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2">

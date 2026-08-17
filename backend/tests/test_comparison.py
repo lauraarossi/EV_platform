@@ -384,3 +384,51 @@ def test_measuring_in_changes_cost_and_co2_together(db):
     # measures at once — and the page has to say the two are no longer alike.
     assert real.saving < 0 and real.co2_saving_kg < 0
     assert real.actual_co2_kg > typed.actual_co2_kg
+
+
+# --- comparing cars with no history between them ------------------------------
+
+def test_two_cars_can_be_compared_over_a_plain_distance(db):
+    """Neither needs a log. Two cars being weighed up have no history between
+    them, and how far is the only missing piece."""
+    a = petrol(db, 6.0, make="Audi", model="A4")
+    b = petrol(db, 8.0, make="Audi", model="A6")
+
+    result = comparison.compare(db, ensure_user(db).id,
+                                comparison.over_distance(10_000), b, driven_vehicle=a,
+                                fallback_price_per_litre=1.80)
+
+    assert result.distance_km == 10_000
+    assert result.your_quantity == pytest.approx(600.0)     # 6.0 over 10,000 km
+    assert result.quantity == pytest.approx(800.0)
+    assert result.saving == pytest.approx(360.0)            # 200 L at 1.80
+    assert result.co2_saving_kg == pytest.approx(478.4, abs=0.1)
+
+
+def test_a_plain_distance_has_no_spend_behind_it(db):
+    """Nothing was actually bought, so there is no receipt to report."""
+    a = petrol(db, 6.0)
+    b = petrol(db, 6.0)
+
+    result = comparison.compare(db, ensure_user(db).id,
+                                comparison.over_distance(10_000), b, driven_vehicle=a,
+                                fallback_price_per_litre=1.80)
+    assert result.actual_spend == 0.0
+    assert result.saving == 0.0
+
+
+def test_a_plain_distance_is_priced_at_the_chosen_day(db):
+    add_price(db, D(2026, 6, 1), 1.50)
+    add_price(db, D(2026, 7, 1), 2.00)
+    a = petrol(db, 6.0)
+    b = petrol(db, 6.0)
+
+    june = comparison.compare(db, ensure_user(db).id,
+                              comparison.over_distance(1000, D(2026, 6, 15)), b,
+                              driven_vehicle=a)
+    july = comparison.compare(db, ensure_user(db).id,
+                              comparison.over_distance(1000, D(2026, 7, 15)), b,
+                              driven_vehicle=a)
+
+    assert june.intervals[0].unit_price == pytest.approx(1.50)
+    assert july.intervals[0].unit_price == pytest.approx(2.00)

@@ -43,6 +43,14 @@ def vehicle_intervals(
 def compare_vehicles(
     vehicle_id: int,
     comparison_vehicle_id: int,
+    distance_km: float | None = Query(
+        default=None, gt=0,
+        description=(
+            "Compare over this distance instead of the logged history. Required "
+            "when the first car has nothing logged — two Showroom cars have no "
+            "history between them, and how far is then the only missing piece."
+        ),
+    ),
     fallback_price_per_litre: float | None = Query(
         default=None,
         description="Used only for intervals with no stored pump price for that date",
@@ -62,24 +70,40 @@ def compare_vehicles(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Price the driving you actually did as though another car had done it.
+    """Price the same driving in two cars.
 
-    Works in either direction — an EV against petrol, or a diesel against an EV
-    — and costs each stretch at the rate that applied at the time rather than
-    today's, which would misstate any history longer than a few weeks.
+    Either car can be anything you have recorded — two from the Garage, two
+    from the Showroom, or one of each. With a log behind the first car each
+    stretch is costed at the rate that applied at the time; without one, give a
+    distance and it is costed at today's.
     """
     vehicle, events = _load(db, user, vehicle_id)
     alternative = owned_vehicle(db, user, comparison_vehicle_id)
+    if alternative.id == vehicle.id:
+        raise HTTPException(status_code=400, detail="Pick two different cars")
 
-    intervals, _ = metrics.build_intervals(events, vehicle)
-    # Offered as the other end of the slider, and reported either way so the
-    # page can show what the entered figure is being weighed against.
-    summary = metrics.summarise(events, vehicle)
-    measured = (
-        summary.avg_efficiency_kwh_per_100km
-        if vehicle.fuel_type == FuelType.electric
-        else summary.avg_consumption_l_per_100km
-    )
+    logged, _ = metrics.build_intervals(events, vehicle)
+
+    if distance_km is not None:
+        intervals, measured = comparison.over_distance(distance_km), None
+    elif logged:
+        intervals = logged
+        # Offered as the other end of the slider, and reported either way so
+        # the page can show what the entered figure is being weighed against.
+        summary = metrics.summarise(events, vehicle)
+        measured = (
+            summary.avg_efficiency_kwh_per_100km
+            if vehicle.fuel_type == FuelType.electric
+            else summary.avg_consumption_l_per_100km
+        )
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{vehicle.make} {vehicle.model} has nothing logged, so there is no "
+                "distance to compare over — pass distance_km"
+            ),
+        )
 
     try:
         result = comparison.compare(

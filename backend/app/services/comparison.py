@@ -151,6 +151,32 @@ def _price_liquid(
     return fallback, None, True
 
 
+@dataclass
+class PlainInterval:
+    """A stretch of driving with no log behind it.
+
+    Two cars in the Showroom have no history between them, so there is nothing
+    to derive a distance from — but comparing them is a fair thing to want, and
+    the only missing piece is how far. Given that, everything else follows the
+    same path as a logged comparison.
+    """
+
+    start_date: str
+    end_date: str
+    distance_km: float
+    cost: float | None = None
+    location_city: str | None = None
+    volume_added_litres: float | None = None
+    energy_added_kwh: float | None = None
+    co2_g: float | None = None
+
+
+def over_distance(distance_km: float, day: datetime.date | None = None) -> list:
+    """One interval of `distance_km`, priced at a given day's rates."""
+    when = (day or datetime.date.today()).isoformat()
+    return [PlainInterval(start_date=when, end_date=when, distance_km=distance_km)]
+
+
 def _price_basis(vehicle: Vehicle) -> str:
     """What this car buys, so two cars can be recognised as buying the same
     thing. A hybrid buys petrol; its electricity is priced separately."""

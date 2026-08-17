@@ -15,6 +15,8 @@ export const getComparison = (
   fallback?: { perLitre?: number; perKwh?: number },
   /** 0 = your car as entered, 1 = as your log actually measured it. */
   measuredWeight = 0,
+  /** Compare over this distance instead of the first car's logged history. */
+  distanceKm?: number,
 ) =>
   api
     .get<Comparison>(`/stats/vehicles/${vehicleId}/compare`, {
@@ -23,6 +25,7 @@ export const getComparison = (
         ...(fallback?.perLitre != null ? { fallback_price_per_litre: fallback.perLitre } : {}),
         ...(fallback?.perKwh != null ? { fallback_price_per_kwh: fallback.perKwh } : {}),
         ...(measuredWeight > 0 ? { measured_weight: measuredWeight } : {}),
+        ...(distanceKm != null ? { distance_km: distanceKm } : {}),
       },
     })
     .then(r => r.data)
