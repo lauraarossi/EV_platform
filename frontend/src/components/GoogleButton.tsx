@@ -68,6 +68,9 @@ export default function GoogleButton({
             else onError('Google did not return a credential')
           },
         })
+        // Rendering appends, so without clearing first a theme toggle leaves
+        // two Google buttons stacked in the card.
+        holder.current.replaceChildren()
         window.google.accounts.id.renderButton(holder.current, {
           theme: theme === 'dark' ? 'filled_black' : 'outline',
           size: 'large',

@@ -133,26 +133,31 @@ def google_sign_in(
     sub = claims["sub"]
     email = claims["email"].strip().lower()
 
+    # The subject id identifies the account, not the address: someone can
+    # change their Gmail and must still land on their own record. Failing that,
+    # match on the verified address, which links to an existing password
+    # account rather than making a second one for the same person and splitting
+    # their vehicles across the two.
     user = db.scalars(select(User).where(User.google_sub == sub)).first()
-
     if user is None:
-        # Link to an existing password account rather than creating a second
-        # one for the same person. Safe because Google says the email is
-        # verified, and the address is unique in our table.
         user = _find_by_email(db, email)
-        if user is not None:
-            user.google_sub = sub
-        else:
-            if not settings.allow_registration:
-                raise HTTPException(status_code=403, detail="Registration is closed")
-            user = User(email=email, google_sub=sub)
-            db.add(user)
+
+    if user is not None:
+        # Only an account that already exists can have been disabled. Checking
+        # this against a freshly built one refused every first-time sign-in:
+        # column defaults are applied on flush, so `is_active` was still None.
+        if not user.is_active:
+            raise HTTPException(status_code=403, detail="This account is disabled")
+        user.google_sub = sub
+    else:
+        if not settings.allow_registration:
+            raise HTTPException(status_code=403, detail="Registration is closed")
+        user = User(email=email, google_sub=sub, is_active=True)
+        db.add(user)
 
     # Refresh the profile bits Google owns.
     user.display_name = user.display_name or claims.get("name")
     user.avatar_url = claims.get("picture") or user.avatar_url
-    if not user.is_active:
-        raise HTTPException(status_code=403, detail="This account is disabled")
 
     db.commit()
     db.refresh(user)

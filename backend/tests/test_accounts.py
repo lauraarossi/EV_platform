@@ -152,6 +152,111 @@ def test_google_rejects_an_unverifiable_credential(client, monkeypatch):
     assert r.status_code == 401
 
 
+def google_claims(**over):
+    """What Google's ID token carries, once verified."""
+    return {
+        "sub": "108000000000000000001",
+        "email": "laura@example.com",
+        "email_verified": True,
+        "name": "Laura",
+        "picture": "https://lh3.googleusercontent.com/a/photo",
+    } | over
+
+
+def accept_google(monkeypatch, **over):
+    """Stand in for Google's signature check, which is exercised separately."""
+    monkeypatch.setattr(settings, "google_client_id", "test-client.apps.googleusercontent.com")
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.auth.verify_google_id_token",
+        lambda credential: google_claims(**over),
+    )
+
+
+def test_google_creates_an_account_and_signs_it_in(client, db, monkeypatch):
+    accept_google(monkeypatch)
+    r = client.post("/api/v1/auth/google", json={"credential": "signed.by.google"})
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["email"] == "laura@example.com"
+    assert body["has_google"] is True and body["has_password"] is False
+    assert body["display_name"] == "Laura"
+    # The session cookie is set, so the next call is already authenticated.
+    assert client.get("/api/v1/auth/me").json()["email"] == "laura@example.com"
+
+
+def test_google_links_to_an_existing_password_account(client, db, monkeypatch):
+    """Otherwise the same person ends up with two accounts and their vehicles
+    split across them. Safe only because Google says the address is verified."""
+    client.post("/api/v1/auth/register",
+                json={"email": "laura@example.com", "password": "correct horse battery"})
+    client.post("/api/v1/auth/logout")
+
+    accept_google(monkeypatch)
+    r = client.post("/api/v1/auth/google", json={"credential": "signed.by.google"})
+
+    assert r.status_code == 200
+    assert r.json()["has_password"] is True and r.json()["has_google"] is True
+    assert db.query(User).count() == 1
+
+
+def test_google_matches_an_existing_address_case_insensitively(client, db, monkeypatch):
+    client.post("/api/v1/auth/register",
+                json={"email": "laura@example.com", "password": "correct horse battery"})
+    accept_google(monkeypatch, email="Laura@Example.COM")
+    client.post("/api/v1/auth/google", json={"credential": "signed.by.google"})
+    assert db.query(User).count() == 1
+
+
+def test_google_returning_signs_into_the_same_account(client, db, monkeypatch):
+    accept_google(monkeypatch)
+    client.post("/api/v1/auth/google", json={"credential": "signed.by.google"})
+    # A second visit, after the address changed on Google's side: the stable
+    # subject id is what identifies the account, not the email.
+    accept_google(monkeypatch, email="laura.new@example.com")
+    r = client.post("/api/v1/auth/google", json={"credential": "signed.by.google"})
+
+    assert r.status_code == 200
+    assert db.query(User).count() == 1
+
+
+def test_google_refuses_an_unverified_address(client, db, monkeypatch):
+    """Without this, anyone able to set an unverified address on a Google
+    account could claim someone else's account here by email."""
+    accept_google(monkeypatch, email_verified=False)
+    r = client.post("/api/v1/auth/google", json={"credential": "signed.by.google"})
+
+    assert r.status_code == 401
+    assert db.query(User).count() == 0
+
+
+def test_google_respects_closed_registration(client, db, monkeypatch):
+    accept_google(monkeypatch)
+    monkeypatch.setattr(settings, "allow_registration", False)
+    r = client.post("/api/v1/auth/google", json={"credential": "signed.by.google"})
+
+    assert r.status_code == 403
+    assert db.query(User).count() == 0
+
+
+def test_google_refuses_a_disabled_account(client, db, monkeypatch):
+    accept_google(monkeypatch)
+    client.post("/api/v1/auth/google", json={"credential": "signed.by.google"})
+    db.query(User).one().is_active = False
+    db.commit()
+
+    assert client.post("/api/v1/auth/google",
+                       json={"credential": "signed.by.google"}).status_code == 403
+
+
+def test_google_sign_in_grants_the_admin_role(client, db, monkeypatch):
+    """The admin bootstrap has to work for whichever way you sign in."""
+    accept_google(monkeypatch)
+    monkeypatch.setattr(settings, "admin_emails", "laura@example.com")
+    r = client.post("/api/v1/auth/google", json={"credential": "signed.by.google"})
+    assert r.json()["is_admin"] is True
+
+
 # --- everything else needs an account --------------------------------------
 
 @pytest.mark.parametrize(
