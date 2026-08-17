@@ -6,15 +6,19 @@ export const getMakes = (fuelType?: FuelType) =>
     .get<CatalogMake[]>('/catalog/makes', { params: fuelType ? { fuel_type: fuelType } : {} })
     .then(r => r.data)
 
-export const getModels = (make: string, fuelType?: FuelType) =>
+export const getModels = (makeKey: string, fuelType?: FuelType) =>
   api
     .get<CatalogModel[]>('/catalog/models', {
-      params: { make, ...(fuelType ? { fuel_type: fuelType } : {}) },
+      params: { make_key: makeKey, ...(fuelType ? { fuel_type: fuelType } : {}) },
     })
     .then(r => r.data)
 
-export const getVariants = (make: string, model: string) =>
-  api.get<CatalogVehicle[]>('/catalog/variants', { params: { make, model } }).then(r => r.data)
+export const getVariants = (makeKey: string, modelKey: string) =>
+  api
+    .get<CatalogVehicle[]>('/catalog/variants', {
+      params: { make_key: makeKey, model_key: modelKey },
+    })
+    .then(r => r.data)
 
 export interface RegLookup {
   registration: string

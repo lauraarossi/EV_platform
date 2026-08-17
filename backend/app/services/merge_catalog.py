@@ -19,8 +19,6 @@ the tie — that is what distinguishes a 40 kWh car from a 52 kWh one.
 
 from __future__ import annotations
 
-import re
-import unicodedata
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -28,6 +26,16 @@ from sqlalchemy.orm import Session
 
 from app.models.catalog import CatalogVehicle, CatalogSource
 from app.models.vehicle import FuelType
+
+# The naming rules live with the dropdown grouping that also depends on them,
+# so the two can never drift apart. Re-exported: this module's callers and
+# tests have used these names since before that split.
+from app.services.catalog_naming import (  # noqa: F401
+    NOISE,
+    make_key,
+    model_key,
+    normalise,
+)
 
 # Copied only when the target field is empty.
 FILLABLE = (
@@ -43,54 +51,6 @@ FILLABLE = (
     "body_style",
     "image_url",
 )
-
-# Marketing words one source uses and the other doesn't. Stripping them is what
-# lets "Audi Q4 40 E-TRON" line up with evdb's "Q4 e-tron", and Citroen's
-# "E-C3" with "ë-C3" (the diaeresis normalises away to nothing).
-NOISE = (
-    "electric", "e-tech", "etech", "e-tron", "etron", "bev", "ev", "hybrid",
-    "elektro", "long range", "standard range", "e",
-)
-
-
-def normalise(text: str | None) -> str:
-    """Reduce a name to comparable letters and digits.
-
-    Accents are folded first, not stripped: evdb writes "Citroën" and "Škoda"
-    where the EEA data writes "CITROEN" and "SKODA". Dropping the accented
-    letter outright would leave "citro n" and never match.
-    """
-    s = str(text or "")
-    s = unicodedata.normalize("NFKD", s)
-    s = "".join(ch for ch in s if not unicodedata.combining(ch))
-    s = s.lower()
-    s = re.sub(r"[^a-z0-9]+", " ", s)
-    return re.sub(r"\s+", " ", s).strip()
-
-
-def make_key(make: str | None) -> str:
-    """Normalise a manufacturer name for comparison.
-
-    The EEA data sometimes records aliases in one field — "VOLKSWAGEN, VW" or
-    "SSANGYONG/KGM" — so only the part before the separator is used.
-    """
-    primary = re.split(r"[,/]", str(make or ""))[0]
-    return normalise(primary)
-
-
-def model_key(make: str | None, model: str | None) -> str:
-    """Strip the make and marketing noise from a model name.
-
-    "RENAULT 4 E-TECH ELECTRIC" and "4 E-Tech" both reduce to "4".
-    """
-    m = normalise(model)
-    mk = normalise(make)
-    if mk and m.startswith(mk + " "):
-        m = m[len(mk) + 1:]
-    for word in NOISE:
-        m = re.sub(rf"\b{re.escape(normalise(word))}\b", " ", m)
-    return re.sub(r"\s+", "", m)
-
 
 @dataclass
 class MergeResult:

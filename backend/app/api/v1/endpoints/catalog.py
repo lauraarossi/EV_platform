@@ -8,49 +8,124 @@ from app.db.session import get_db
 from app.models.catalog import CatalogVehicle
 from app.models.vehicle import FuelType
 from app.schemas.catalog import CatalogMake, CatalogModel, CatalogVehicleRead
-from app.services import eea_catalog, ev_catalog, irish_reg, merge_catalog, vca_catalog
+from app.services import (
+    catalog_naming,
+    eea_catalog,
+    ev_catalog,
+    irish_reg,
+    merge_catalog,
+    vca_catalog,
+)
 
 router = APIRouter(prefix="/catalog", tags=["vehicle catalogue"])
 
 
 @router.get("/makes", response_model=list[CatalogMake])
 def list_makes(fuel_type: FuelType | None = None, db: Session = Depends(get_db)):
-    stmt = select(
-        CatalogVehicle.make, func.count(func.distinct(CatalogVehicle.model))
-    ).group_by(CatalogVehicle.make).order_by(CatalogVehicle.make)
+    """One entry per manufacturer, not per spelling of one.
+
+    Rows are grouped by `make_key`, so "CUPRA" and "Cupra" are one make.
+    """
+    counts = select(
+        CatalogVehicle.make_key, func.count(func.distinct(CatalogVehicle.model_key))
+    ).group_by(CatalogVehicle.make_key)
+    spellings = select(
+        CatalogVehicle.make_key, CatalogVehicle.make, CatalogVehicle.source
+    ).distinct()
     if fuel_type:
-        stmt = stmt.where(CatalogVehicle.fuel_type == fuel_type)
-    return [CatalogMake(make=m, model_count=n) for m, n in db.execute(stmt)]
+        counts = counts.where(CatalogVehicle.fuel_type == fuel_type)
+        spellings = spellings.where(CatalogVehicle.fuel_type == fuel_type)
+
+    candidates: dict[str, list[tuple[str, str]]] = {}
+    for key, make, source in db.execute(spellings):
+        candidates.setdefault(key, []).append(
+            (catalog_naming.clean_make_display(make), source.value)
+        )
+
+    makes = [
+        CatalogMake(
+            make=catalog_naming.choose_display(candidates.get(key, [])),
+            make_key=key,
+            model_count=n,
+        )
+        for key, n in db.execute(counts)
+    ]
+    return sorted(makes, key=lambda m: m.make.lower())
 
 
 @router.get("/models", response_model=list[CatalogModel])
 def list_models(
-    make: str = Query(..., description="Exact make from /catalog/makes"),
+    make_key: str | None = Query(None, description="From /catalog/makes"),
+    make: str | None = Query(None, description="A make name; resolved to its key"),
     fuel_type: FuelType | None = None,
     db: Session = Depends(get_db),
 ):
-    stmt = (
-        select(CatalogVehicle.make, CatalogVehicle.model, func.count())
-        .where(CatalogVehicle.make == make)
-        .group_by(CatalogVehicle.make, CatalogVehicle.model)
-        .order_by(CatalogVehicle.model)
+    """Models for one make, with the three sources' spellings folded together.
+
+    A nameplate sold with several powertrains is one model here: "Captur" and
+    "CAPTUR E-TECH HYBRID" are the same car, and the fuel filter separates them.
+    """
+    key = make_key or catalog_naming.make_key(make)
+    if not key:
+        raise HTTPException(status_code=422, detail="make_key or make is required")
+
+    counts = (
+        select(CatalogVehicle.model_key, func.count())
+        .where(CatalogVehicle.make_key == key)
+        .group_by(CatalogVehicle.model_key)
+    )
+    spellings = (
+        select(CatalogVehicle.model_key, CatalogVehicle.make, CatalogVehicle.model,
+               CatalogVehicle.source)
+        .where(CatalogVehicle.make_key == key)
+        .distinct()
     )
     if fuel_type:
-        stmt = stmt.where(CatalogVehicle.fuel_type == fuel_type)
-    return [CatalogModel(make=mk, model=mo, variant_count=n) for mk, mo, n in db.execute(stmt)]
+        counts = counts.where(CatalogVehicle.fuel_type == fuel_type)
+        spellings = spellings.where(CatalogVehicle.fuel_type == fuel_type)
+
+    candidates: dict[str, list[tuple[str, str]]] = {}
+    for model_key_, mk, mo, source in db.execute(spellings):
+        candidates.setdefault(model_key_, []).append(
+            (catalog_naming.clean_display(mk, mo), source.value)
+        )
+
+    models = [
+        CatalogModel(
+            make_key=key,
+            model=catalog_naming.choose_display(candidates.get(model_key_, [])),
+            model_key=model_key_,
+            variant_count=n,
+        )
+        for model_key_, n in db.execute(counts)
+    ]
+    return sorted(models, key=lambda m: m.model.lower())
 
 
 @router.get("/variants", response_model=list[CatalogVehicleRead])
 def list_variants(
-    make: str,
-    model: str,
+    make_key: str | None = None,
+    model_key: str | None = None,
+    make: str | None = None,
+    model: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Full specs per variant — the frontend prefills straight from these,
-    so there is no second round trip after choosing one."""
+    so there is no second round trip after choosing one.
+
+    Names are accepted in place of keys and normalised the same way, so a
+    link built by hand with "Renault"/"Zoe" still resolves.
+    """
+    mk = make_key or catalog_naming.make_key(make)
+    mo = model_key or catalog_naming.model_key(make, model)
+    if not mk or not mo:
+        raise HTTPException(
+            status_code=422, detail="make_key and model_key (or make and model) are required"
+        )
+
     return db.scalars(
         select(CatalogVehicle)
-        .where(CatalogVehicle.make == make, CatalogVehicle.model == model)
+        .where(CatalogVehicle.make_key == mk, CatalogVehicle.model_key == mo)
         # Commonly registered variants first, so the likely answer is near the top.
         .order_by(
             CatalogVehicle.registration_count.desc().nullslast(),
@@ -158,6 +233,13 @@ def import_vca(db: Session = Depends(get_db)):
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Import failed: {exc}") from exc
     return asdict(result)
+
+
+@router.post("/rekey")
+def rekey(db: Session = Depends(get_db)):
+    """Recompute the make/model grouping keys after the naming rules change,
+    without re-importing anything."""
+    return catalog_naming.rekey(db)
 
 
 @router.post("/merge")

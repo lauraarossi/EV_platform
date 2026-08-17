@@ -121,14 +121,21 @@ export interface CatalogVehicle {
   data_quality: string | null
 }
 
+/**
+ * The three catalogue sources each spell a car their own way, so the API
+ * groups them: `make`/`model` are the spelling to show, and the `_key` fields
+ * identify the group and are what to send back.
+ */
 export interface CatalogMake {
   make: string
+  make_key: string
   model_count: number
 }
 
 export interface CatalogModel {
-  make: string
+  make_key: string
   model: string
+  model_key: string
   variant_count: number
 }
 

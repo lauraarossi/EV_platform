@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import String, Float, Integer, Enum, Index
+from sqlalchemy import String, Float, Integer, Enum, Index, event
 from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, TimestampMixin
 from app.models.vehicle import FuelType, Transmission
@@ -38,6 +38,12 @@ class CatalogVehicle(Base, TimestampMixin):
 
     make: Mapped[str] = mapped_column(String(100), index=True)
     model: Mapped[str] = mapped_column(String(120), index=True)
+
+    # Normalised forms used to group rows describing the same car, since the
+    # three sources spell it three ways. Derived — never set by hand, and kept
+    # current by the listener below. See services/catalog_naming.
+    make_key: Mapped[str | None] = mapped_column(String(100), index=True)
+    model_key: Mapped[str | None] = mapped_column(String(120), index=True)
     variant: Mapped[str] = mapped_column(String(200))
     # Only set where the source actually carries one. The EEA data has no trim
     # names at all, so it stays null there rather than being invented from the
@@ -82,3 +88,17 @@ class CatalogVehicle(Base, TimestampMixin):
     # Set when EV detail (battery, range) was copied in from another catalogue
     # row, so the provenance of a merged record stays visible.
     enriched_from: Mapped[str | None] = mapped_column(String(160))
+
+
+@event.listens_for(CatalogVehicle, "before_insert")
+@event.listens_for(CatalogVehicle, "before_update")
+def _derive_keys(mapper, connection, target: CatalogVehicle) -> None:
+    """Keep the grouping keys in step with the names they come from.
+
+    Done here rather than in each importer so a new source cannot forget it,
+    and so correcting a name by hand re-groups the row straight away.
+    """
+    from app.services import catalog_naming
+
+    target.make_key = catalog_naming.make_key(target.make)
+    target.model_key = catalog_naming.model_key(target.make, target.model)

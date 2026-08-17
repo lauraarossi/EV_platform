@@ -6,9 +6,9 @@ import { Field, Select } from './form'
 /**
  * Cascading make -> model -> variant picker.
  *
- * The catalogue's `trim_level` column is empty for every row, so the trim is
- * carried inside the variant name ("Techno 52"). That's why the third step is
- * "variant" rather than a separate trim dropdown.
+ * The dropdowns are keyed by the API's `make_key`/`model_key` rather than the
+ * displayed name: three catalogues spell one car three ways ("ZOE", "Zoe",
+ * "New ZOE"), and the keys are what fold those into a single entry.
  *
  * Choosing a variant hands the whole spec back — the parent form prefills from
  * it, and every field stays editable afterwards.
@@ -28,8 +28,8 @@ export default function CatalogPicker({
   const [models, setModels] = useState<CatalogModel[]>([])
   const [variants, setVariants] = useState<CatalogVehicle[]>([])
 
-  const [make, setMake] = useState('')
-  const [model, setModel] = useState('')
+  const [makeKey, setMakeKey] = useState('')
+  const [modelKey, setModelKey] = useState('')
   const [variantId, setVariantId] = useState('')
 
   const [loading, setLoading] = useState(true)
@@ -37,7 +37,7 @@ export default function CatalogPicker({
 
   useEffect(() => {
     setLoading(true)
-    setMake('')
+    setMakeKey('')
     getMakes(fuelType || undefined)
       .then(setMakes)
       .catch(() => setError('Catalogue unavailable'))
@@ -47,18 +47,22 @@ export default function CatalogPicker({
   useEffect(() => {
     setModels([])
     setVariants([])
-    setModel('')
+    setModelKey('')
     setVariantId('')
-    if (!make) return
-    getModels(make, fuelType || undefined).then(setModels).catch(() => setError('Could not load models'))
-  }, [make, fuelType])
+    if (!makeKey) return
+    getModels(makeKey, fuelType || undefined)
+      .then(setModels)
+      .catch(() => setError('Could not load models'))
+  }, [makeKey, fuelType])
 
   useEffect(() => {
     setVariants([])
     setVariantId('')
-    if (!make || !model) return
-    getVariants(make, model).then(setVariants).catch(() => setError('Could not load variants'))
-  }, [make, model])
+    if (!makeKey || !modelKey) return
+    getVariants(makeKey, modelKey)
+      .then(setVariants)
+      .catch(() => setError('Could not load variants'))
+  }, [makeKey, modelKey])
 
   const chooseVariant = (id: string) => {
     setVariantId(id)
@@ -67,8 +71,8 @@ export default function CatalogPicker({
   }
 
   const reset = () => {
-    setMake('')
-    setModel('')
+    setMakeKey('')
+    setModelKey('')
     setVariantId('')
     onClear()
   }
@@ -94,7 +98,7 @@ export default function CatalogPicker({
             Fills the specs in for you, from EU registration data and an open EV database.
           </p>
         </div>
-        {(make || model || variantId) && (
+        {(makeKey || modelKey || variantId) && (
           <button
             type="button"
             onClick={reset}
@@ -120,10 +124,10 @@ export default function CatalogPicker({
         </Field>
 
         <Field label="Make">
-          <Select value={make} onChange={e => setMake(e.target.value)} disabled={loading}>
+          <Select value={makeKey} onChange={e => setMakeKey(e.target.value)} disabled={loading}>
             <option value="">{loading ? 'Loading…' : 'Select…'}</option>
             {makes.map(m => (
-              <option key={m.make} value={m.make}>
+              <option key={m.make_key} value={m.make_key}>
                 {m.make}
               </option>
             ))}
@@ -131,10 +135,10 @@ export default function CatalogPicker({
         </Field>
 
         <Field label="Model">
-          <Select value={model} onChange={e => setModel(e.target.value)} disabled={!make}>
-            <option value="">{make ? 'Select…' : '—'}</option>
+          <Select value={modelKey} onChange={e => setModelKey(e.target.value)} disabled={!makeKey}>
+            <option value="">{makeKey ? 'Select…' : '—'}</option>
             {models.map(m => (
-              <option key={m.model} value={m.model}>
+              <option key={m.model_key} value={m.model_key}>
                 {m.model}
               </option>
             ))}
@@ -142,8 +146,12 @@ export default function CatalogPicker({
         </Field>
 
         <Field label="Version">
-          <Select value={variantId} onChange={e => chooseVariant(e.target.value)} disabled={!model}>
-            <option value="">{model ? 'Select…' : '—'}</option>
+          <Select
+            value={variantId}
+            onChange={e => chooseVariant(e.target.value)}
+            disabled={!modelKey}
+          >
+            <option value="">{modelKey ? 'Select…' : '—'}</option>
             {variants.map(v => (
               <option key={v.id} value={v.id}>
                 {v.variant}

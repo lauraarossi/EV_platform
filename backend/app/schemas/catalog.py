@@ -4,13 +4,16 @@ from app.models.vehicle import FuelType
 
 
 class CatalogMake(BaseModel):
+    # The spelling to show; `make_key` is what to send back.
     make: str
+    make_key: str
     model_count: int
 
 
 class CatalogModel(BaseModel):
-    make: str
+    make_key: str
     model: str
+    model_key: str
     variant_count: int
 
 
