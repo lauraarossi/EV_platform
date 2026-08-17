@@ -38,32 +38,6 @@ To stop the dev servers (the database keeps running, and your data is safe):
 ./scripts/stop-dev.sh          # add --db to stop Postgres too
 ```
 
-### After a laptop restart
-
-1. **Start Docker Desktop on Windows** and wait for it to say *Running*.
-2. Run `./scripts/start-dev.sh` in WSL.
-
-That's it. The script is safe to re-run — it skips anything already up.
-
-> **If `docker` isn't found in WSL:** open Docker Desktop → Settings →
-> Resources → **WSL Integration** and enable it for your distro. Reinstalling
-> Docker Desktop resets this.
-
-### Doing it manually
-
-```bash
-conda activate EV_Env
-
-docker compose up -d db                       # database
-cd backend && alembic upgrade head            # schema
-uvicorn app.main:app --reload                 # API  :8000
-cd ../frontend && npm run dev                 # web  :5173
-```
-
-The API and web servers run in the foreground, so use separate terminals.
-
----
-
 ## Tests
 
 ```bash
