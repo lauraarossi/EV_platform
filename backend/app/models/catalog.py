@@ -10,6 +10,9 @@ class CatalogSource(str, enum.Enum):
     # EEA CO2 monitoring (Regulation EU 2019/631): every new car registered in
     # the EU. Covers combustion as well as electric, which evdb does not.
     eea = "eea"
+    # UK Vehicle Certification Agency: the only source carrying trim names
+    # and transmissions. Downloaded by hand, see services/vca_catalog.
+    vca = "vca"
     manual = "manual"
 
 
@@ -68,7 +71,7 @@ class CatalogVehicle(Base, TimestampMixin):
 
     body_style: Mapped[str | None] = mapped_column(String(60))
     image_url: Mapped[str | None] = mapped_column(String(500))
-    data_quality: Mapped[str | None] = mapped_column(String(40))
+    data_quality: Mapped[str | None] = mapped_column(String(120))
 
     # Market this row describes (EEA rows are per member state). Lets the
     # picker prefer cars actually sold here.

@@ -8,7 +8,7 @@ from app.db.session import get_db
 from app.models.catalog import CatalogVehicle
 from app.models.vehicle import FuelType
 from app.schemas.catalog import CatalogMake, CatalogModel, CatalogVehicleRead
-from app.services import eea_catalog, ev_catalog, irish_reg, merge_catalog
+from app.services import eea_catalog, ev_catalog, irish_reg, merge_catalog, vca_catalog
 
 router = APIRouter(prefix="/catalog", tags=["vehicle catalogue"])
 
@@ -141,6 +141,20 @@ def import_eea(
         result = eea_catalog.ingest(
             db, country=country.upper(), min_registrations=min_registrations, years=wanted
         )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Import failed: {exc}") from exc
+    return asdict(result)
+
+
+@router.post("/import/vca")
+def import_vca(db: Session = Depends(get_db)):
+    """Load the VCA new-car data — the only source with trim names and
+    transmissions. The file is downloaded by hand into data/vca; the newest
+    zip there is used."""
+    try:
+        result = vca_catalog.ingest(db)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Import failed: {exc}") from exc
     return asdict(result)
