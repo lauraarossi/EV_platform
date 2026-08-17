@@ -8,6 +8,7 @@ import { getIntervals, getSummary } from '../api/stats'
 import { getChargingSessions } from '../api/charging'
 import { CHARGER_LABEL, type ChargerType } from '../types'
 import { useAsync } from '../hooks/useAsync'
+import { useUnits } from '../hooks/useUnits'
 import PageHeader from '../components/PageHeader'
 import GlassCard from '../components/GlassCard'
 import StatTile from '../components/StatTile'
@@ -19,6 +20,7 @@ const shortDate = (iso: string) =>
   new Date(iso).toLocaleDateString('en-IE', { day: 'numeric', month: 'short' })
 
 export default function Stats() {
+  const { units } = useUnits()
   const [vehicleId, setVehicleId] = useState<number | null>(null)
 
   const { data, error, loading, reload } = useAsync(async () => {
@@ -72,12 +74,21 @@ export default function Stats() {
 
   const efficiencySeries = intervals.map(i => ({
     date: shortDate(i.end_date),
-    value: i.efficiency_kwh_per_100km,
+    value:
+      i.efficiency_kwh_per_100km == null
+        ? null
+        : Number(units.efficiency(i.efficiency_kwh_per_100km).replace(/,/g, '')),
     exact: i.energy_is_exact,
   }))
   const costSeries = intervals
     .filter(i => i.cost_per_100km != null)
-    .map(i => ({ date: shortDate(i.end_date), value: i.cost_per_100km }))
+    .map(i => ({
+      date: shortDate(i.end_date),
+      value:
+        units.system === 'imperial'
+          ? Number((i.cost_per_100km! / 62.1371).toFixed(3))
+          : i.cost_per_100km,
+    }))
 
   // Spend by charger type — where the money actually goes.
   const byCharger = new Map<ChargerType, number>()
@@ -94,7 +105,7 @@ export default function Stats() {
     <>
       <PageHeader
         title="Stats"
-        subtitle={`${summary.total_distance_km.toLocaleString()} km measured across ${summary.interval_count} interval${summary.interval_count === 1 ? '' : 's'}.`}
+        subtitle={`${units.distance(summary.total_distance_km)} measured across ${summary.interval_count} interval${summary.interval_count === 1 ? '' : 's'}.`}
       />
 
       {owned.length > 1 && (
@@ -106,14 +117,13 @@ export default function Stats() {
       <section aria-label="Summary" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
           label="Efficiency"
-          value={summary.avg_efficiency_kwh_per_100km != null ? String(summary.avg_efficiency_kwh_per_100km) : '—'}
-          unit="kWh/100km"
+          value={units.efficiency(summary.avg_efficiency_kwh_per_100km)}
+          unit={units.efficiencyUnit}
           hint={summary.energy_is_exact ? 'Measured from battery %' : 'Approximate'}
         />
         <StatTile
           label="Running cost"
-          value={summary.avg_cost_per_100km != null ? `€${summary.avg_cost_per_100km.toFixed(2)}` : '—'}
-          unit="/100km"
+          value={units.costPerDistance(summary.avg_cost_per_100km)}
           accent="var(--accent-3)"
         />
         <StatTile
@@ -133,7 +143,7 @@ export default function Stats() {
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
         <ChartCard
           title="Efficiency over time"
-          subtitle="kWh per 100 km, one point per interval between charges"
+          subtitle={`${units.efficiencyUnit}, one point per interval between charges`}
           footer={approximate ? 'Hollow points are approximate — battery % was not recorded.' : undefined}
         >
           <ResponsiveContainer width="100%" height={220}>
@@ -141,7 +151,7 @@ export default function Stats() {
               <CartesianGrid {...gridProps} />
               <XAxis dataKey="date" {...axisProps} />
               <YAxis {...axisProps} />
-              <Tooltip content={<Tip unit="kWh/100km" />} cursor={{ stroke: 'var(--border-strong)' }} />
+              <Tooltip content={<Tip unit={units.efficiencyUnit} />} cursor={{ stroke: 'var(--border-strong)' }} />
               <Line
                 type="monotone" dataKey="value"
                 stroke="var(--series-1)" strokeWidth={2}
@@ -163,7 +173,10 @@ export default function Stats() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Cost per 100 km" subtitle="What each interval of driving cost you">
+        <ChartCard
+          title={units.system === 'imperial' ? 'Cost per mile' : 'Cost per 100 km'}
+          subtitle="What each interval of driving cost you"
+        >
           {costSeries.length === 0 ? (
             <p className="py-12 text-center text-sm text-ink-3">No costs recorded yet.</p>
           ) : (
@@ -172,7 +185,7 @@ export default function Stats() {
                 <CartesianGrid {...gridProps} />
                 <XAxis dataKey="date" {...axisProps} />
                 <YAxis {...axisProps} />
-                <Tooltip content={<Tip unit="€/100km" />} cursor={{ stroke: 'var(--border-strong)' }} />
+                <Tooltip content={<Tip unit={units.system === 'imperial' ? '€/mi' : '€/100km'} />} cursor={{ stroke: 'var(--border-strong)' }} />
                 <Line
                   type="monotone" dataKey="value"
                   stroke="var(--series-3)" strokeWidth={2}
@@ -216,7 +229,8 @@ export default function Stats() {
             </caption>
             <thead>
               <tr className="border-b border-edge text-left">
-                {['Period', 'Distance', 'Energy used', 'kWh/100km', '€/100km', 'Driving'].map(h => (
+                {['Period', 'Distance', 'Energy used', units.efficiencyUnit,
+                  units.system === 'imperial' ? '€/mi' : '€/100km', 'Driving'].map(h => (
                   <th key={h} className="px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-ink-3">{h}</th>
                 ))}
               </tr>
@@ -225,13 +239,13 @@ export default function Stats() {
               {intervals.map(i => (
                 <tr key={`${i.from_session_id}-${i.to_session_id}`} className="border-b border-edge last:border-0">
                   <td className="readout px-4 py-3 text-ink-2">{i.start_date} → {i.end_date}</td>
-                  <td className="readout px-4 py-3 text-ink">{i.distance_km.toLocaleString()} km</td>
+                  <td className="readout px-4 py-3 text-ink">{units.distance(i.distance_km)}</td>
                   <td className="readout px-4 py-3 text-ink-2">
                     {i.energy_used_kwh} kWh{!i.energy_is_exact && <span className="text-ink-3"> ~</span>}
                   </td>
-                  <td className="readout px-4 py-3 font-medium text-ink">{i.efficiency_kwh_per_100km}</td>
+                  <td className="readout px-4 py-3 font-medium text-ink">{units.efficiency(i.efficiency_kwh_per_100km)}</td>
                   <td className="readout px-4 py-3 text-ink-2">
-                    {i.cost_per_100km != null ? `€${i.cost_per_100km.toFixed(2)}` : '—'}
+                    {units.costPerDistance(i.cost_per_100km)}
                   </td>
                   <td className="px-4 py-3 capitalize text-ink-2">{i.driving_mix ?? '—'}</td>
                 </tr>

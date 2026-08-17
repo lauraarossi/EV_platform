@@ -4,6 +4,7 @@ import { getSummary } from '../api/stats'
 import type { Summary, Vehicle, VehicleInput } from '../types'
 import { TRANSMISSION_LABEL } from '../types'
 import { useAsync } from '../hooks/useAsync'
+import { useUnits } from '../hooks/useUnits'
 import PageHeader from '../components/PageHeader'
 import GlassCard from '../components/GlassCard'
 import Modal from '../components/Modal'
@@ -20,11 +21,13 @@ function Spec({ label, value }: { label: string; value: string }) {
 }
 
 function StatusStrip({ s }: { s: Summary }) {
+  const { units } = useUnits()
   const items: [string, string][] = [
-    ['Odometer', s.latest_odometer_km != null ? `${s.latest_odometer_km.toLocaleString()} km` : '—'],
+    ['Odometer', units.distance(s.latest_odometer_km)],
     ['Charges', String(s.session_count)],
-    ['Efficiency', s.avg_efficiency_kwh_per_100km != null ? `${s.avg_efficiency_kwh_per_100km} kWh/100km` : '—'],
-    ['Tracked', s.total_distance_km > 0 ? `${s.total_distance_km.toLocaleString()} km` : '—'],
+    ['Efficiency', s.avg_efficiency_kwh_per_100km != null
+      ? `${units.efficiency(s.avg_efficiency_kwh_per_100km)} ${units.efficiencyUnit}` : '—'],
+    ['Tracked', s.total_distance_km > 0 ? units.distance(s.total_distance_km) : '—'],
   ]
   return (
     <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl border border-edge p-3 sm:grid-cols-4">
@@ -49,6 +52,7 @@ function VehicleCard({
   onEdit: () => void
   onDelete: () => void
 }) {
+  const { units } = useUnits()
   const isEv = v.fuel_type === 'electric'
 
   return (
@@ -95,13 +99,16 @@ function VehicleCard({
             <>
               {v.battery_capacity_kwh != null && <Spec label="Battery" value={`${v.battery_capacity_kwh} kWh`} />}
               {v.onboard_charger_kw != null && <Spec label="AC charger" value={`${v.onboard_charger_kw} kW`} />}
-              {v.wltp_range_km != null && <Spec label="WLTP" value={`${v.wltp_range_km} km`} />}
+              {v.wltp_range_km != null && <Spec label="WLTP" value={units.distance(v.wltp_range_km)} />}
             </>
           ) : (
             <>
               {v.engine_size_cc != null && <Spec label="Engine" value={`${v.engine_size_cc} cc`} />}
               {v.fuel_consumption_l_per_100km != null && (
-                <Spec label="Consumption" value={`${v.fuel_consumption_l_per_100km} L/100km`} />
+                <Spec
+                  label="Consumption"
+                  value={`${units.consumption(v.fuel_consumption_l_per_100km)} ${units.consumptionUnit}`}
+                />
               )}
             </>
           )}
@@ -110,8 +117,10 @@ function VehicleCard({
             <Spec label="Transmission" value={TRANSMISSION_LABEL[v.transmission]} />
           )}
           {v.zero_to_100_seconds != null && <Spec label="0–100" value={`${v.zero_to_100_seconds} s`} />}
-          {v.top_speed_kmh != null && <Spec label="Top speed" value={`${v.top_speed_kmh} km/h`} />}
-          {v.kerb_weight_kg != null && <Spec label="Weight" value={`${v.kerb_weight_kg} kg`} />}
+          {v.top_speed_kmh != null && (
+            <Spec label="Top speed" value={`${units.distanceValue(v.top_speed_kmh)} ${units.distanceUnit}/h`} />
+          )}
+          {v.kerb_weight_kg != null && <Spec label="Weight" value={units.weight(v.kerb_weight_kg)} />}
         </dl>
 
         {!v.is_comparison_vehicle && summary && <StatusStrip s={summary} />}

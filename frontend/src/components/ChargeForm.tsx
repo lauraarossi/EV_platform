@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import type { ChargingSession, ChargingSessionInput, Vehicle } from '../types'
 import { CHARGER_LABEL, DRIVING_MIX_LABEL } from '../types'
 import { Field, TextInput, Select, FormError } from './form'
+import { useUnits } from '../hooks/useUnits'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -37,11 +38,13 @@ export default function ChargeForm({
   onSubmit: (data: ChargingSessionInput) => Promise<void>
   onCancel: () => void
 }) {
+  const { units } = useUnits()
   const [f, setF] = useState({
     vehicle_id: String(existing?.vehicle_id ?? defaultVehicleId ?? vehicles[0]?.id ?? ''),
     date: existing?.date ?? today(),
     time_of_day: existing?.time_of_day?.slice(0, 5) ?? '',
-    odometer_km: existing ? String(existing.odometer_km) : '',
+    // Held in the *displayed* unit while editing; converted back on submit.
+    odometer_km: existing ? String(Number(units.fromKm(existing.odometer_km).toFixed(1))) : '',
     kwh_added: existing ? String(existing.kwh_added) : '',
     cost: existing?.cost != null ? String(existing.cost) : '',
     soc_start_pct: existing?.soc_start_pct != null ? String(existing.soc_start_pct) : '',
@@ -64,7 +67,9 @@ export default function ChargeForm({
   const socHalfFilled = (socStart === null) !== (socEnd === null)
   const socInverted = socStart !== null && socEnd !== null && socEnd <= socStart
   const odoTooLow =
-    lastOdometer != null && f.odometer_km.trim() !== '' && Number(f.odometer_km) < lastOdometer
+    lastOdometer != null &&
+    f.odometer_km.trim() !== '' &&
+    units.toKm(Number(f.odometer_km)) < lastOdometer
 
   async function handle(e: FormEvent) {
     e.preventDefault()
@@ -78,7 +83,7 @@ export default function ChargeForm({
         vehicle_id: Number(f.vehicle_id),
         date: f.date,
         time_of_day: f.time_of_day ? `${f.time_of_day}:00` : null,
-        odometer_km: Number(f.odometer_km),
+        odometer_km: units.toKm(Number(f.odometer_km)),
         kwh_added: Number(f.kwh_added),
         cost: num(f.cost),
         currency: 'EUR',
@@ -121,14 +126,14 @@ export default function ChargeForm({
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Field
-          label="Odometer (km)"
+          label={`Odometer (${units.distanceUnit})`}
           required
-          hint={lastOdometer != null ? `Last logged: ${lastOdometer.toLocaleString()} km` : undefined}
+          hint={lastOdometer != null ? `Last logged: ${units.distance(lastOdometer)}` : undefined}
         >
           <TextInput
             type="number" step="0.1" min="0" required
             value={f.odometer_km} onChange={set('odometer_km')}
-            placeholder="e.g. 12480"
+            placeholder={units.system === 'imperial' ? 'e.g. 7755' : 'e.g. 12480'}
           />
         </Field>
         <Field label="Energy added (kWh)" required>
@@ -190,7 +195,7 @@ export default function ChargeForm({
         <Field label="City">
           <TextInput value={f.location_city} onChange={set('location_city')} placeholder="e.g. Dublin" />
         </Field>
-        <Field label="Driving since last charge">
+        <Field label="Driving" hint="Since the last charge">
           <Select value={f.driving_mix} onChange={set('driving_mix')}>
             <option value="">—</option>
             {Object.entries(DRIVING_MIX_LABEL).map(([v, label]) => (

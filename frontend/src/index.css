@@ -153,15 +153,17 @@ html.dark body {
     box-shadow: var(--shadow-glass);
   }
 
-  /* Specular top edge — what sells the material as glass rather than a tint. */
+  /* Specular top edge — what sells the material as glass rather than a tint.
+     Deliberately no `overflow: hidden`: that clipped anything a child wanted
+     to pop out, such as the account dropdown in the header. The line is inset
+     from the corners instead, so it never crosses the rounded edge. */
   .glass-sheen {
     position: relative;
-    overflow: hidden;
   }
   .glass-sheen::before {
     content: "";
     position: absolute;
-    inset-inline: 0;
+    inset-inline: 14px;
     top: 0;
     height: 1px;
     background: linear-gradient(

@@ -14,13 +14,15 @@ export function Field({
   required?: boolean
   children: ReactNode
 }) {
+  // Column layout with the control pushed to the bottom, so a label that wraps
+  // to two lines doesn't shove its input out of line with the rest of the row.
   return (
-    <label className="block">
+    <label className="flex h-full flex-col">
       <span className="text-[11px] uppercase tracking-wider text-ink-3">
         {label}
         {required && <span className="text-critical"> *</span>}
       </span>
-      <div className="mt-1.5">{children}</div>
+      <div className="mt-1.5 mt-auto pt-1.5">{children}</div>
       {hint && <p className="mt-1 text-[11px] text-ink-3">{hint}</p>}
     </label>
   )

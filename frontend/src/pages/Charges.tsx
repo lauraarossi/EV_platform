@@ -10,6 +10,7 @@ import { getIntervals } from '../api/stats'
 import type { ChargingSession, ChargingSessionInput, Interval } from '../types'
 import { CHARGER_LABEL } from '../types'
 import { useAsync } from '../hooks/useAsync'
+import { useUnits } from '../hooks/useUnits'
 import PageHeader from '../components/PageHeader'
 import GlassCard from '../components/GlassCard'
 import Modal from '../components/Modal'
@@ -18,6 +19,7 @@ import VehiclePicker from '../components/VehiclePicker'
 import { Loading, ErrorState, EmptyState } from '../components/States'
 
 export default function Charges() {
+  const { units } = useUnits()
   const [vehicleId, setVehicleId] = useState<number | null>(null)
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<ChargingSession | null>(null)
@@ -72,7 +74,7 @@ export default function Charges() {
         title="Charges"
         subtitle={
           sessions.length
-            ? `${sessions.length} logged · latest odometer ${latestOdometer?.toLocaleString()} km`
+            ? `${sessions.length} logged · latest odometer ${units.distance(latestOdometer)}`
             : 'Log a charge and the odometer reading.'
         }
         action={
@@ -120,7 +122,7 @@ export default function Charges() {
             <table className="w-full min-w-[56rem] text-sm">
               <thead>
                 <tr className="border-b border-edge text-left">
-                  {['Date', 'Odometer', 'Since last', 'Added', 'Battery', 'Cost', 'Efficiency', 'Charger', ''].map(h => (
+                  {['Date', `Odometer (${units.distanceUnit})`, 'Since last', 'Added', 'Battery', 'Cost', units.efficiencyUnit, 'Charger', ''].map(h => (
                     <th key={h} className="px-3 py-3 text-[11px] font-medium uppercase tracking-wider text-ink-3">
                       {h}
                     </th>
@@ -137,10 +139,10 @@ export default function Charges() {
                         {s.time_of_day && <span className="text-ink-3"> {s.time_of_day.slice(0, 5)}</span>}
                       </td>
                       <td className="readout px-3 py-3 font-medium text-ink">
-                        {s.odometer_km.toLocaleString()}
+                        {units.distanceValue(s.odometer_km)}
                       </td>
                       <td className="readout px-3 py-3 text-ink-2">
-                        {iv ? `${iv.distance_km.toLocaleString()} km` : '—'}
+                        {iv ? units.distance(iv.distance_km) : '—'}
                       </td>
                       <td className="readout px-3 py-3 text-ink">{s.kwh_added} kWh</td>
                       <td className="readout px-3 py-3 text-ink-2">
@@ -154,7 +156,7 @@ export default function Charges() {
                       <td className="readout px-3 py-3">
                         {iv?.efficiency_kwh_per_100km != null ? (
                           <span className="text-ink">
-                            {iv.efficiency_kwh_per_100km}
+                            {units.efficiency(iv.efficiency_kwh_per_100km)}
                             {/* an approximated figure must say so, not look identical to a measured one */}
                             {!iv.energy_is_exact && (
                               <span title="Approximate — battery % wasn't recorded" className="text-ink-3"> ~</span>

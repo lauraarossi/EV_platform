@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
+import { useUnits } from '../hooks/useUnits'
 
 export default function AccountMenu() {
   const { user, signOut } = useAuth()
+  const { units, setSystem } = useUnits()
   const [open, setOpen] = useState(false)
   const wrap = useRef<HTMLDivElement>(null)
 
@@ -53,6 +55,38 @@ export default function AccountMenu() {
             )}
             <p className="truncate text-xs text-ink-3">{user.email}</p>
           </div>
+          <div className="my-1 h-px bg-edge" />
+
+          <div className="px-3 pb-1 pt-1.5">
+            <p className="text-[10px] uppercase tracking-wider text-ink-3">Units</p>
+            <div className="mt-1.5 flex gap-1" role="group" aria-label="Units">
+              {(['metric', 'imperial'] as const).map(s => {
+                const active = units.system === s
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setSystem(s)}
+                    aria-pressed={active}
+                    className={`focus-ring flex-1 rounded-lg px-2 py-1.5 text-xs font-medium capitalize ${
+                      active ? 'text-ink' : 'text-ink-3 hover:text-ink-2'
+                    }`}
+                    style={
+                      active
+                        ? {
+                            background: 'color-mix(in oklab, var(--accent) 18%, transparent)',
+                            border: '1px solid color-mix(in oklab, var(--accent) 35%, transparent)',
+                          }
+                        : { border: '1px solid var(--border)' }
+                    }
+                  >
+                    {s === 'metric' ? 'km' : 'miles'}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
           <div className="my-1 h-px bg-edge" />
           <button
             type="button"

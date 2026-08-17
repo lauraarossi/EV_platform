@@ -4,12 +4,15 @@ import './index.css'
 import App from './App.tsx'
 import { ThemeProvider } from './hooks/useTheme'
 import { AuthProvider } from './hooks/useAuth'
+import { UnitsProvider } from './hooks/useUnits'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider>
       <AuthProvider>
-        <App />
+        <UnitsProvider>
+          <App />
+        </UnitsProvider>
       </AuthProvider>
     </ThemeProvider>
   </StrictMode>,

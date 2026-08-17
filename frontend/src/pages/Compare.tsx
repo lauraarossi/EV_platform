@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { getVehicles } from '../api/vehicles'
 import { getComparison } from '../api/stats'
 import { useAsync } from '../hooks/useAsync'
+import { useUnits } from '../hooks/useUnits'
 import PageHeader from '../components/PageHeader'
 import GlassCard from '../components/GlassCard'
 import StatTile from '../components/StatTile'
@@ -12,6 +13,7 @@ const fmt = (n: number, d = 2) =>
   n.toLocaleString('en-IE', { minimumFractionDigits: d, maximumFractionDigits: d })
 
 export default function Compare() {
+  const { units } = useUnits()
   const [evId, setEvId] = useState<number | null>(null)
   const [petrolId, setPetrolId] = useState<number | null>(null)
 
@@ -76,7 +78,7 @@ export default function Compare() {
     <>
       <PageHeader
         title="vs Petrol"
-        subtitle={`${comparison.distance_km.toLocaleString()} km of real driving, priced at the pump rates that applied at the time.`}
+        subtitle={`${units.distance(comparison.distance_km)} of real driving, priced at the pump rates that applied at the time.`}
       />
 
       <GlassCard className="mb-4 p-5">
@@ -129,13 +131,13 @@ export default function Compare() {
           accent="var(--series-2)"
         />
         <StatTile
-          label="EV per 100km"
-          value={comparison.ev_cost_per_100km != null ? `€${fmt(comparison.ev_cost_per_100km)}` : '—'}
+          label={units.system === 'imperial' ? 'EV per mile' : 'EV per 100km'}
+          value={units.costPerDistance(comparison.ev_cost_per_100km)}
           accent="var(--accent-3)"
         />
         <StatTile
-          label="Petrol per 100km"
-          value={comparison.petrol_cost_per_100km != null ? `€${fmt(comparison.petrol_cost_per_100km)}` : '—'}
+          label={units.system === 'imperial' ? 'Petrol per mile' : 'Petrol per 100km'}
+          value={units.costPerDistance(comparison.petrol_cost_per_100km)}
           accent="var(--series-2)"
         />
       </section>
@@ -158,12 +160,13 @@ export default function Compare() {
               €{fmt(Math.abs(comparison.saving))}
             </p>
             <p className="mt-1 text-sm text-ink-2">
-              {saved ? 'saved' : 'extra'} over {comparison.distance_km.toLocaleString()} km
+              {saved ? 'saved' : 'extra'} over {units.distance(comparison.distance_km)}
               {comparison.petrol_cost > 0 &&
                 ` · ${fmt(Math.abs(comparison.saving / comparison.petrol_cost) * 100, 0)}% ${saved ? 'less' : 'more'}`}
             </p>
             <p className="mt-3 text-xs text-ink-3">
-              Against a {comparison.comparison_vehicle} at {comparison.l_per_100km} L/100km. The
+              Against a {comparison.comparison_vehicle} at{' '}
+              {units.consumption(comparison.l_per_100km)} {units.consumptionUnit}. The
               first charge is excluded — it paid for driving from before you started logging.
             </p>
           </div>
@@ -191,7 +194,7 @@ export default function Compare() {
                 {comparison.intervals.map(i => (
                   <tr key={`${i.start_date}-${i.end_date}`} className="border-b border-edge last:border-0">
                     <td className="readout px-4 py-3 text-ink-2">{i.start_date} → {i.end_date}</td>
-                    <td className="readout px-4 py-3 text-ink">{i.distance_km.toLocaleString()} km</td>
+                    <td className="readout px-4 py-3 text-ink">{units.distance(i.distance_km)}</td>
                     <td className="readout px-4 py-3 text-ink-2">{fmt(i.litres, 1)}</td>
                     <td className="readout px-4 py-3 text-ink">
                       {i.price_per_litre != null ? `€${fmt(i.price_per_litre, 3)}` : '—'}
