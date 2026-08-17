@@ -8,14 +8,7 @@ from app.db.session import get_db
 from app.models.catalog import CatalogVehicle
 from app.models.vehicle import FuelType
 from app.schemas.catalog import CatalogMake, CatalogModel, CatalogVehicleRead
-from app.services import (
-    catalog_naming,
-    eea_catalog,
-    ev_catalog,
-    irish_reg,
-    merge_catalog,
-    vca_catalog,
-)
+from app.services import catalog_naming, eea_catalog, irish_reg
 
 router = APIRouter(prefix="/catalog", tags=["vehicle catalogue"])
 
@@ -173,77 +166,3 @@ def lookup_registration(reg: str = Query(..., min_length=4, max_length=16)):
     """Decode an Irish plate. Year and county come from the plate itself; make
     and model are not derivable, as the national database is not public."""
     return asdict(irish_reg.decode(reg))
-
-
-@router.post("/import/evdb")
-def import_evdb(db: Session = Depends(get_db)):
-    """Refresh from the open EV database. Safe to re-run: it updates catalogue
-    rows in place and never touches the vehicles you own."""
-    try:
-        result = ev_catalog.ingest(db)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Import failed: {exc}") from exc
-    return asdict(result)
-
-
-@router.post("/import/eea")
-def import_eea(
-    country: str = Query(default="IE", min_length=2, max_length=2),
-    min_registrations: int = Query(
-        default=3, ge=1, description="Drop one-off variants below this many registrations"
-    ),
-    years: str = Query(
-        default="all",
-        description="Comma-separated registration years, or 'all' for every year available",
-    ),
-    db: Session = Depends(get_db),
-):
-    """Pull specs from the EEA CO2 monitoring dataset — the only free source
-    covering petrol and diesel for European models.
-
-    Importing several years is what turns up cars no longer sold new: an Audi
-    A4, for instance, stopped appearing after 2023.
-    """
-    if years.strip().lower() == "all":
-        wanted = sorted(eea_catalog.TABLES)
-    else:
-        try:
-            wanted = [int(y) for y in years.split(",") if y.strip()]
-        except ValueError:
-            raise HTTPException(status_code=422, detail="years must be numbers or 'all'")
-
-    try:
-        result = eea_catalog.ingest(
-            db, country=country.upper(), min_registrations=min_registrations, years=wanted
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Import failed: {exc}") from exc
-    return asdict(result)
-
-
-@router.post("/import/vca")
-def import_vca(db: Session = Depends(get_db)):
-    """Load the VCA new-car data — the only source with trim names and
-    transmissions. The file is downloaded by hand into data/vca; the newest
-    zip there is used."""
-    try:
-        result = vca_catalog.ingest(db)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Import failed: {exc}") from exc
-    return asdict(result)
-
-
-@router.post("/rekey")
-def rekey(db: Session = Depends(get_db)):
-    """Recompute the make/model grouping keys after the naming rules change,
-    without re-importing anything."""
-    return catalog_naming.rekey(db)
-
-
-@router.post("/merge")
-def merge(dry_run: bool = False, db: Session = Depends(get_db)):
-    """Fill battery and range on electric EEA rows from matching evdb entries.
-    Only empty fields are filled — nothing already known is overwritten."""
-    return asdict(merge_catalog.enrich_from_evdb(db, dry_run=dry_run))

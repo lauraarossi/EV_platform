@@ -14,11 +14,12 @@ import datetime
 import bcrypt
 import jwt
 from fastapi import Depends, HTTPException, Request, Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db.session import get_db
-from app.models.user import User
+from app.models.user import User, UserRole
 
 ALGORITHM = "HS256"
 
@@ -168,3 +169,45 @@ def get_current_user(
     if user is None:
         raise HTTPException(status_code=401, detail="Not signed in")
     return user
+
+
+def get_current_admin(user: User = Depends(get_current_user)) -> User:
+    """Require the admin role.
+
+    403 rather than the 404 used for another person's records: those must not
+    reveal whether the row exists, whereas the admin routes are in the public
+    schema and pretending otherwise would only be confusing.
+    """
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Administrator access required")
+    return user
+
+
+# --- roles ------------------------------------------------------------------
+
+def apply_admin_policy(user: User) -> bool:
+    """Grant the admin role to an account listed in ADMIN_EMAILS.
+
+    Promotion only. Removing an address from the variable does not demote
+    anyone, so a typo in an environment variable cannot lock every admin out of
+    the console at once; use the console itself to take the role away.
+    """
+    if user.role != UserRole.admin and user.email.lower() in settings.admin_email_list:
+        user.role = UserRole.admin
+        return True
+    return False
+
+
+def sync_admin_roles(db: Session) -> int:
+    """Apply the policy to existing accounts, at startup.
+
+    Without this, an account already holding a valid session cookie would keep
+    a stale role until it next signed in — which, with a thirty-day session,
+    could be a while.
+    """
+    promoted = 0
+    for user in db.scalars(select(User)):
+        promoted += int(apply_admin_policy(user))
+    if promoted:
+        db.commit()
+    return promoted

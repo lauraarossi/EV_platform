@@ -1,9 +1,23 @@
 import datetime
+import enum
 
-from sqlalchemy import String, DateTime, Boolean
+from sqlalchemy import String, DateTime, Boolean, Enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
+
+
+class UserRole(str, enum.Enum):
+    """What an account is allowed to do beyond its own data.
+
+    Deliberately two values. Everything an admin can do is global — refreshing
+    the shared catalogue, reading service health — and none of it reaches into
+    another person's vehicles or charges, which stay scoped by `user_id` no
+    matter who is asking.
+    """
+
+    user = "user"
+    admin = "admin"
 
 
 class User(Base, TimestampMixin):
@@ -34,6 +48,11 @@ class User(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_login_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True))
 
+    role: Mapped[UserRole] = mapped_column(
+        Enum(UserRole), default=UserRole.user, server_default=UserRole.user.value,
+        nullable=False, index=True,
+    )
+
     vehicles: Mapped[list["Vehicle"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
@@ -44,3 +63,7 @@ class User(Base, TimestampMixin):
     @property
     def has_password(self) -> bool:
         return self.password_hash is not None
+
+    @property
+    def is_admin(self) -> bool:
+        return self.role == UserRole.admin

@@ -7,6 +7,8 @@ export interface AuthUser {
   avatar_url: string | null
   has_password: boolean
   has_google: boolean
+  /** Whether to offer the Admin tab. The server enforces the role itself. */
+  is_admin: boolean
 }
 
 export interface AuthOptions {

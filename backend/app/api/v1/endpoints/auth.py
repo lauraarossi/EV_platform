@@ -15,6 +15,7 @@ from app.schemas.auth import (
     UserRead,
 )
 from app.security import (
+    apply_admin_policy,
     clear_session_cookie,
     get_current_user,
     hash_password,
@@ -34,6 +35,7 @@ def _as_read(user: User) -> UserRead:
         avatar_url=user.avatar_url,
         has_password=user.password_hash is not None,
         has_google=user.google_sub is not None,
+        is_admin=user.is_admin,
     )
 
 
@@ -45,6 +47,9 @@ def _find_by_email(db: Session, email: str) -> User | None:
 
 def _touch_login(db: Session, user: User) -> None:
     user.last_login_at = datetime.datetime.now(datetime.timezone.utc)
+    # Sign-in is also when an account listed in ADMIN_EMAILS picks up the role,
+    # so a deployment can grant it without anyone touching the database.
+    apply_admin_policy(user)
     db.commit()
 
 
@@ -77,6 +82,7 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
         display_name=payload.display_name,
         password_hash=hashed,
     )
+    apply_admin_policy(user)
     db.add(user)
     db.commit()
     db.refresh(user)

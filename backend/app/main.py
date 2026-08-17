@@ -1,3 +1,5 @@
+import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -10,7 +12,34 @@ from app.auth import BasicAuthMiddleware
 from app.config import settings
 from app.docs import router as docs_router
 
+log = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Apply ADMIN_EMAILS to accounts that already exist.
+
+    An account holding a valid session cookie never passes through sign-in, so
+    without this it could wait out a thirty-day session before picking up the
+    role. Failures here are logged rather than raised: not being able to
+    promote someone is no reason to refuse to serve the app.
+    """
+    from app.db.session import SessionLocal
+    from app.security import sync_admin_roles
+
+    if settings.admin_email_list:
+        try:
+            with SessionLocal() as db:
+                promoted = sync_admin_roles(db)
+            if promoted:
+                log.info("Granted the admin role to %d account(s)", promoted)
+        except Exception:
+            log.exception("Could not apply ADMIN_EMAILS at startup")
+    yield
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="Eevie API",
     description="Track EV usage, charging costs, and compare against petrol equivalents",
     version="0.1.0",

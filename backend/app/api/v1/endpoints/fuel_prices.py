@@ -1,5 +1,4 @@
 import datetime
-from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
@@ -8,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.fuel_price import FuelPrice, FuelKind, PriceSource
 from app.schemas.fuel_price import FuelPriceCreate, FuelPriceRead, PriceQuoteRead
-from app.services import fuel_pricing, oil_bulletin
+from app.services import fuel_pricing
 
 router = APIRouter(prefix="/fuel-prices", tags=["fuel prices"])
 
@@ -93,20 +92,3 @@ def quote(
             detail="No price available for that date. Import the Oil Bulletin or add one manually.",
         )
     return q
-
-
-@router.post("/import/oil-bulletin")
-def import_oil_bulletin(
-    countries: str = Query(default="IE", description="Comma-separated ISO codes, or 'all'"),
-    db: Session = Depends(get_db),
-):
-    """Pull the EU Weekly Oil Bulletin. Safe to re-run — manual prices are
-    stored separately and never touched."""
-    wanted = None if countries.strip().lower() == "all" else {
-        c.strip().upper() for c in countries.split(",") if c.strip()
-    }
-    try:
-        result = oil_bulletin.ingest(db, countries=wanted)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Import failed: {exc}") from exc
-    return asdict(result)

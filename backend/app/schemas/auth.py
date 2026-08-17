@@ -27,6 +27,9 @@ class UserRead(BaseModel):
     # True when the account is linked to Google, so the UI can explain how to
     # sign in next time.
     has_google: bool
+    # Drives whether the Admin tab is offered. The server enforces the role
+    # regardless — hiding the link is a courtesy, not the control.
+    is_admin: bool = False
 
     model_config = {"from_attributes": True}
 

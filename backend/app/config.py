@@ -36,6 +36,17 @@ class Settings(BaseSettings):
     # Set to false once you have an account, to stop anyone else signing up.
     allow_registration: bool = True
 
+    # Comma-separated emails that get the admin role. This is the way in on a
+    # hosted deployment, where there is no shell to promote the first account
+    # from — and being listed here only ever grants the role, never removes it,
+    # so editing the variable cannot silently lock the console down. Demote
+    # from the admin console instead.
+    admin_emails: str = ""
+
+    @property
+    def admin_email_list(self) -> list[str]:
+        return [e.strip().lower() for e in self.admin_emails.split(",") if e.strip()]
+
     # Where the hand-downloaded VCA zips live. Empty means "work it out from
     # the layout" — see services/vca_catalog.
     vca_data_dir: str = ""

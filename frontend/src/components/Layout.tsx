@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import ThemeToggle from './ThemeToggle'
 import AccountMenu from './AccountMenu'
+import { useAuth } from '../hooks/useAuth'
 
 // Ordered as the workflow runs: set up a car, log charges, read the numbers,
 // then compare. '/' stays the Charges route since logging is the frequent task.
@@ -10,6 +11,10 @@ const navItems = [
   { to: '/stats', label: 'Stats' },
   { to: '/compare', label: 'vs Petrol' },
 ]
+
+// Appended rather than placed in the run of tasks: it is a different kind of
+// thing, and it should not push the four everyday tabs around on a phone.
+const adminItem = { to: '/admin', label: 'Admin' }
 
 function navClass({ isActive }: { isActive: boolean }) {
   return [
@@ -34,6 +39,9 @@ function ActivePill({ isActive }: { isActive: boolean }) {
 }
 
 export default function Layout() {
+  const { user } = useAuth()
+  const items = user?.is_admin ? [...navItems, adminItem] : navItems
+
   return (
     <>
       <div className="relative z-[1] flex min-h-svh flex-col">
@@ -54,7 +62,7 @@ export default function Layout() {
 
             {/* Desktop nav */}
             <nav className="ml-auto hidden items-center gap-1 md:flex">
-              {navItems.map(({ to, label }) => (
+              {items.map(({ to, label }) => (
                 <NavLink key={to} to={to} end={to === '/'} className={navClass}>
                   {({ isActive }) => (
                     <>
@@ -80,7 +88,7 @@ export default function Layout() {
         {/* Mobile nav — thumb-reachable, since this is a phone-first logging app */}
         <nav className="fixed inset-x-0 bottom-0 z-20 px-4 pb-4 md:hidden">
           <div className="glass glass-sheen mx-auto flex max-w-md items-center justify-between gap-1 rounded-2xl px-2 py-2">
-            {navItems.map(({ to, label }) => (
+            {items.map(({ to, label }) => (
               <NavLink key={to} to={to} end={to === '/'} className={navClass}>
                 {({ isActive }) => (
                   <>
