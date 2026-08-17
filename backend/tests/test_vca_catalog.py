@@ -161,6 +161,34 @@ def test_import_is_idempotent(db):
     assert db.query(CatalogVehicle).count() == 1
 
 
+# --- locating the file --------------------------------------------------------
+
+def test_data_dir_falls_back_to_the_container_layout(tmp_path, monkeypatch):
+    """The repo keeps data/ beside the backend, the image copies it inside.
+    Only the second exists in production, and it was silently unreachable."""
+    container = tmp_path / "app" / "data" / "vca"
+    container.mkdir(parents=True)
+    monkeypatch.setattr(
+        vca_catalog, "DATA_DIR_CANDIDATES", (tmp_path / "nonexistent", container)
+    )
+    assert vca_catalog.data_dir() == container
+
+
+def test_data_dir_override_wins(tmp_path, monkeypatch):
+    elsewhere = tmp_path / "mounted"
+    elsewhere.mkdir()
+    monkeypatch.setattr(vca_catalog.settings, "vca_data_dir", str(elsewhere))
+    assert vca_catalog.data_dir() == elsewhere
+
+
+def test_missing_data_dir_lists_what_was_tried(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        vca_catalog, "DATA_DIR_CANDIDATES", (tmp_path / "a", tmp_path / "b")
+    )
+    with pytest.raises(FileNotFoundError, match="tried:"):
+        vca_catalog.data_dir()
+
+
 def test_missing_csv_in_zip_is_reported():
     empty = io.BytesIO()
     with zipfile.ZipFile(empty, "w") as z:

@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     # Set to false once you have an account, to stop anyone else signing up.
     allow_registration: bool = True
 
+    # Where the hand-downloaded VCA zips live. Empty means "work it out from
+    # the layout" — see services/vca_catalog.
+    vca_data_dir: str = ""
+
     openweather_api_key: str = ""
     fuel_price_api_key: str = ""
 

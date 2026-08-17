@@ -26,6 +26,11 @@ RUN pip install -r requirements.txt
 
 COPY backend/ .
 
+# The VCA catalogue zip, which cannot be fetched at runtime (see
+# services/vca_catalog). Shipping it in the image keeps git the source of
+# truth, so a fresh environment can rebuild its catalogue unaided.
+COPY data/ ./data/
+
 # main.py picks this up automatically and serves it.
 COPY --from=web /web/dist ./app/static
 

@@ -35,6 +35,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.catalog import CatalogVehicle, CatalogSource
 from app.models.vehicle import FuelType, Transmission
 
@@ -42,8 +43,14 @@ SOURCE_NAME = "VCA New Car Fuel Consumption (UK)"
 SOURCE_URL = "https://carfueldata.vehicle-certification-agency.gov.uk/"
 LICENCE = "Crown copyright"
 
-# Where the manually downloaded zips live.
-DATA_DIR = Path(__file__).resolve().parents[2].parent / "data" / "vca"
+# Where the manually downloaded zips live. The repo keeps them beside the
+# backend, while the container copies them inside it, so both layouts are
+# tried rather than assuming one. VCA_DATA_DIR overrides either.
+_HERE = Path(__file__).resolve()
+DATA_DIR_CANDIDATES = (
+    _HERE.parents[2].parent / "data" / "vca",   # repo:      <root>/data/vca
+    _HERE.parents[2] / "data" / "vca",          # container: /app/data/vca
+)
 
 ENCODING = "cp1252"
 
@@ -71,13 +78,24 @@ class VcaImportResult:
     with_trim: int
 
 
+def data_dir() -> Path:
+    """The first data directory that actually exists, so the same code works
+    from a checkout and from the container image."""
+    override = (settings.vca_data_dir or "").strip()
+    candidates = (Path(override),) if override else DATA_DIR_CANDIDATES
+    for candidate in candidates:
+        if candidate.is_dir():
+            return candidate
+    tried = ", ".join(str(c) for c in candidates)
+    raise FileNotFoundError(f"no VCA data directory found (tried: {tried})")
+
+
 def latest_file() -> Path:
     """The newest zip in data/vca, so a refresh is just dropping a file in."""
-    if not DATA_DIR.is_dir():
-        raise FileNotFoundError(f"no VCA data directory at {DATA_DIR}")
-    zips = sorted(DATA_DIR.glob("*.zip"))
+    directory = data_dir()
+    zips = sorted(directory.glob("*.zip"))
     if not zips:
-        raise FileNotFoundError(f"no VCA zip found in {DATA_DIR}")
+        raise FileNotFoundError(f"no VCA zip found in {directory}")
     return zips[-1]
 
 
