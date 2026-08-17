@@ -153,6 +153,21 @@ html.dark body {
     box-shadow: var(--shadow-glass);
   }
 
+  /* A panel that floats over page content rather than over the background.
+     `.glass` is 40% opaque in light and 4.5% in dark, which reads beautifully
+     against the gradient and not at all against a button — the account menu
+     sat on top of "Add vehicle" and neither could be read.
+
+     The glass tint is layered over an opaque base instead of replaced by one,
+     so the material still looks like the rest of the app; the raised shadow is
+     what says it is floating. */
+  .glass-popover {
+    background: linear-gradient(var(--surface), var(--surface)), var(--surface-solid);
+    box-shadow:
+      0 12px 32px -8px rgb(0 0 0 / 0.28),
+      0 2px 8px -2px rgb(0 0 0 / 0.16);
+  }
+
   /* Specular top edge — what sells the material as glass rather than a tint.
      Deliberately no `overflow: hidden`: that clipped anything a child wanted
      to pop out, such as the account dropdown in the header. The line is inset
