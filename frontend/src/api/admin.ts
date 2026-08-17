@@ -40,7 +40,7 @@ export interface AdminOverview {
   users: number
   admins: number
   vehicles: number
-  charging_sessions: number
+  fuel_events: number
   fuel_prices: number
   tariffs: number
   tasks: AdminTask[]

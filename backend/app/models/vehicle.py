@@ -43,13 +43,17 @@ class Vehicle(Base, TimestampMixin):
     # Free text, not an enum: see Transmission's docstring.
     transmission: Mapped[str | None] = mapped_column(String(60))
 
-    # EV-specific
+    # Electric side. Battery capacity turns a state-of-charge swing into kWh.
     battery_capacity_kwh: Mapped[float | None] = mapped_column(Float)
     onboard_charger_kw: Mapped[float | None] = mapped_column(Float)
     wltp_range_km: Mapped[float | None] = mapped_column(Float)
+    # Quoted consumption, used to price this car as a hypothetical alternative.
+    consumption_kwh_per_100km: Mapped[float | None] = mapped_column(Float)
 
-    # Petrol comparison car fields
+    # Liquid-fuel side, mirroring the two above: tank capacity turns a tank
+    # percentage into litres, and the quoted figure prices the car hypothetically.
     engine_size_cc: Mapped[int | None] = mapped_column(Integer)
+    tank_capacity_litres: Mapped[float | None] = mapped_column(Float)
     fuel_consumption_l_per_100km: Mapped[float | None] = mapped_column(Float)
 
     # Performance (shared)
@@ -58,6 +62,9 @@ class Vehicle(Base, TimestampMixin):
     top_speed_kmh: Mapped[int | None] = mapped_column(Integer)
     kerb_weight_kg: Mapped[int | None] = mapped_column(Integer)
 
+    # A car you do not own, kept only to price your driving against. Any fuel
+    # type can sit on either side: an EV owner comparing against petrol, or a
+    # diesel owner wondering what an EV would have cost.
     is_comparison_vehicle: Mapped[bool] = mapped_column(default=False)
 
     nickname: Mapped[str | None] = mapped_column(String(100))
@@ -66,6 +73,6 @@ class Vehicle(Base, TimestampMixin):
     image_url: Mapped[str | None] = mapped_column(String(500))
 
     user: Mapped["User"] = relationship(back_populates="vehicles")
-    charging_sessions: Mapped[list["ChargingSession"]] = relationship(
+    fuel_events: Mapped[list["FuelEvent"]] = relationship(
         back_populates="vehicle", cascade="all, delete-orphan"
     )

@@ -24,7 +24,9 @@ export interface Vehicle {
   battery_capacity_kwh?: number | null
   onboard_charger_kw?: number | null
   wltp_range_km?: number | null
+  consumption_kwh_per_100km?: number | null
   engine_size_cc?: number | null
+  tank_capacity_litres?: number | null
   fuel_consumption_l_per_100km?: number | null
   horsepower?: number | null
   zero_to_100_seconds?: number | null
@@ -35,18 +37,26 @@ export interface Vehicle {
 
 export type VehicleInput = Omit<Vehicle, 'id'>
 
-export interface ChargingSession {
+/**
+ * One refuelling: a charge, a tank of petrol, or both at once for a plug-in
+ * hybrid. What went in is always recorded; the level either side is optional
+ * and is what makes the interval's consumption exact rather than approximate.
+ */
+export interface FuelEvent {
   id: number
   vehicle_id: number
   date: string
   time_of_day?: string | null
   odometer_km: number
-  kwh_added: number
+  energy_kwh?: number | null
+  volume_litres?: number | null
   cost?: number | null
   currency: string
   soc_start_pct?: number | null
   soc_end_pct?: number | null
-  charger_type: ChargerType
+  tank_start_pct?: number | null
+  tank_end_pct?: number | null
+  charger_type?: ChargerType | null
   charger_capacity_kw?: number | null
   location_city?: string | null
   country: string
@@ -54,37 +64,59 @@ export interface ChargingSession {
   notes?: string | null
 }
 
-export type ChargingSessionInput = Omit<ChargingSession, 'id'>
+export type FuelEventInput = Omit<FuelEvent, 'id'>
 
-/** The driving between two consecutive charges. Derived server-side. */
+/** The driving between two consecutive fills. Derived server-side. */
 export interface Interval {
-  from_session_id: number
-  to_session_id: number
+  from_event_id: number
+  to_event_id: number
   start_date: string
   end_date: string
   distance_km: number
-  kwh_added: number
   cost: number | null
+
+  energy_added_kwh: number | null
   energy_used_kwh: number | null
-  /** false when energy was approximated from kWh added rather than SoC. */
+  /** false when energy was approximated from what went in rather than SoC. */
   energy_is_exact: boolean
   efficiency_kwh_per_100km: number | null
+
+  volume_added_litres: number | null
+  volume_used_litres: number | null
+  volume_is_exact: boolean
+  consumption_l_per_100km: number | null
+
+  /** Burning the fuel and generating the electricity — not the full lifecycle. */
+  co2_g: number | null
+  co2_g_per_km: number | null
+
   cost_per_100km: number | null
   driving_mix: DrivingMix | null
   location_city: string | null
 }
 
 export interface Summary {
-  session_count: number
+  event_count: number
   interval_count: number
   total_distance_km: number
-  total_kwh_added: number
   total_cost: number
+
+  total_energy_added_kwh: number
   total_energy_used_kwh: number | null
   energy_is_exact: boolean
   avg_efficiency_kwh_per_100km: number | null
-  avg_cost_per_100km: number | null
   avg_price_per_kwh: number | null
+
+  total_volume_added_litres: number
+  total_volume_used_litres: number | null
+  volume_is_exact: boolean
+  avg_consumption_l_per_100km: number | null
+  avg_price_per_litre: number | null
+
+  total_co2_kg: number | null
+  avg_co2_g_per_km: number | null
+
+  avg_cost_per_100km: number | null
   latest_odometer_km: number | null
   anomalies: string[]
 }
@@ -139,30 +171,48 @@ export interface CatalogModel {
   variant_count: number
 }
 
-/** One interval of driving, costed as petrol at the price that applied then. */
+/** One interval of driving, costed at the rate that applied at the time. */
 export interface PricedInterval {
   start_date: string
   end_date: string
   distance_km: number
-  litres: number
-  price_per_litre: number | null
-  petrol_cost: number | null
+  /** Litres or kWh, per the comparison car's fuel — see Comparison.unit. */
+  quantity: number
+  unit_price: number | null
+  cost: number | null
   price_as_of: string | null
   price_is_estimate: boolean
 }
 
+/**
+ * What the same driving would have cost in another car. Symmetric: the
+ * comparison may be petrol, diesel or electric, whichever you drive.
+ */
 export interface Comparison {
   distance_km: number
-  ev_cost: number
-  petrol_cost: number
+  vehicle: string
+  actual_cost: number
+  alternative_cost: number
+  /** Positive means the alternative would have cost more — you are ahead. */
   saving: number
-  litres: number
-  ev_cost_per_100km: number | null
-  petrol_cost_per_100km: number | null
+  actual_cost_per_100km: number | null
+  alternative_cost_per_100km: number | null
+  actual_co2_kg: number | null
+  alternative_co2_kg: number
+  /** Positive means the alternative would have emitted more. */
+  co2_saving_kg: number
+  actual_co2_g_per_km: number | null
+  alternative_co2_g_per_km: number | null
+  grid_co2_g_per_kwh: number
+  quantity: number
+  unit: 'litres' | 'kwh'
+  unit_label: string
+  basis: number
+  basis_label: string
+  comparison_vehicle: string
+  comparison_fuel: FuelType
   used_fallback_price: boolean
   unpriced_intervals: number
-  comparison_vehicle: string
-  l_per_100km: number
   intervals: PricedInterval[]
 }
 

@@ -1,85 +1,125 @@
 import { useState } from 'react'
 import {
-  getChargingSessions,
-  createChargingSession,
-  updateChargingSession,
-  deleteChargingSession,
-} from '../api/charging'
+  getFuelEvents,
+  createFuelEvent,
+  updateFuelEvent,
+  deleteFuelEvent,
+} from '../api/fuelEvents'
 import { getVehicles } from '../api/vehicles'
 import { getIntervals } from '../api/stats'
-import type { ChargingSession, ChargingSessionInput, Interval } from '../types'
+import type { FuelEvent, FuelEventInput, Interval, Vehicle } from '../types'
 import { CHARGER_LABEL } from '../types'
+import { EventNoun, burnsFuel, eventNoun, takesElectricity } from '../fuel'
 import { useAsync } from '../hooks/useAsync'
 import { useUnits } from '../hooks/useUnits'
 import PageHeader from '../components/PageHeader'
 import GlassCard from '../components/GlassCard'
 import Modal from '../components/Modal'
-import ChargeForm from '../components/ChargeForm'
+import FuelEventForm from '../components/FuelEventForm'
 import VehiclePicker from '../components/VehiclePicker'
 import { Loading, ErrorState, EmptyState } from '../components/States'
+
+/** Whichever figure this car is measured by, with its unit. */
+function consumptionCell(iv: Interval | undefined, vehicle: Vehicle, units: ReturnType<typeof useUnits>['units']) {
+  if (!iv) return null
+  if (takesElectricity(vehicle.fuel_type) && iv.efficiency_kwh_per_100km != null) {
+    return { value: units.efficiency(iv.efficiency_kwh_per_100km), exact: iv.energy_is_exact }
+  }
+  if (burnsFuel(vehicle.fuel_type) && iv.consumption_l_per_100km != null) {
+    return { value: units.consumption(iv.consumption_l_per_100km), exact: iv.volume_is_exact }
+  }
+  return null
+}
 
 export default function Charges() {
   const { units } = useUnits()
   const [vehicleId, setVehicleId] = useState<number | null>(null)
   const [adding, setAdding] = useState(false)
-  const [editing, setEditing] = useState<ChargingSession | null>(null)
+  const [editing, setEditing] = useState<FuelEvent | null>(null)
 
   const { data, error, loading, reload } = useAsync(async () => {
     const vehicles = await getVehicles()
     const owned = vehicles.filter(v => !v.is_comparison_vehicle)
     const selected = vehicleId ?? owned[0]?.id ?? null
-    const sessions = selected ? await getChargingSessions(selected) : []
+    const events = selected ? await getFuelEvents(selected) : []
     const intervalData = selected ? await getIntervals(selected) : { intervals: [], anomalies: [] }
-    return { vehicles, owned, selected, sessions, ...intervalData }
+    return { vehicles, owned, selected, events, ...intervalData }
   }, [vehicleId])
 
-  if (loading) return <Loading label="Loading charges…" />
+  if (loading) return <Loading label="Loading your log…" />
   if (error) return <ErrorState message={error} onRetry={reload} />
   if (!data) return null
 
-  const { owned, selected, sessions, intervals, anomalies } = data
+  const { owned, selected, events, intervals, anomalies } = data
 
   if (owned.length === 0) {
     return (
       <>
-        <PageHeader title="Charges" subtitle="Log a charge and the odometer reading." />
-        <EmptyState title="Add a vehicle first" body="You need a car in the Garage before you can log charges against it." />
+        <PageHeader title="Log" subtitle="Record a fill-up and the odometer reading." />
+        <EmptyState
+          title="Add a vehicle first"
+          body="You need a car in the Garage before you can log anything against it."
+        />
       </>
     )
   }
 
-  // The interval ending at a given charge describes the driving that preceded it.
-  const intervalTo = new Map<number, Interval>(intervals.map(i => [i.to_session_id, i]))
-  const latestOdometer = sessions.length
-    ? Math.max(...sessions.map(s => s.odometer_km))
-    : null
+  const vehicle = owned.find(v => v.id === selected) ?? owned[0]
+  const fuel = vehicle.fuel_type
+  const electric = takesElectricity(fuel)
+  const liquid = burnsFuel(fuel)
+  const noun = eventNoun(fuel)
 
-  const save = async (payload: ChargingSessionInput) => {
-    if (editing) await updateChargingSession(editing.id, payload)
-    else await createChargingSession(payload)
+  // The interval ending at a given event describes the driving that preceded it.
+  const intervalTo = new Map<number, Interval>(intervals.map(i => [i.to_event_id, i]))
+  const latestOdometer = events.length ? Math.max(...events.map(e => e.odometer_km)) : null
+
+  const save = async (payload: FuelEventInput) => {
+    if (editing) await updateFuelEvent(editing.id, payload)
+    else await createFuelEvent(payload)
     setEditing(null)
     setAdding(false)
     reload()
   }
 
-  const remove = async (s: ChargingSession) => {
-    if (!confirm(`Delete the charge logged on ${s.date}?`)) return
-    await deleteChargingSession(s.id)
+  const remove = async (e: FuelEvent) => {
+    if (!confirm(`Delete the ${noun} logged on ${e.date}?`)) return
+    await deleteFuelEvent(e.id)
     reload()
   }
+
+  const columns = [
+    'Date',
+    `Odometer (${units.distanceUnit})`,
+    'Since last',
+    'Added',
+    electric && liquid ? 'Levels' : electric ? 'Battery' : 'Tank',
+    'Cost',
+    electric ? units.efficiencyUnit : units.consumptionUnit,
+    electric ? 'Charger' : 'Where',
+    '',
+  ]
+
+  const approximated = intervals.some(i =>
+    electric ? i.energy_used_kwh != null && !i.energy_is_exact
+             : i.volume_used_litres != null && !i.volume_is_exact,
+  )
 
   return (
     <>
       <PageHeader
-        title="Charges"
+        title={EventNoun(fuel, true)}
         subtitle={
-          sessions.length
-            ? `${sessions.length} logged · latest odometer ${units.distance(latestOdometer)}`
-            : 'Log a charge and the odometer reading.'
+          events.length
+            ? `${events.length} logged · latest odometer ${units.distance(latestOdometer)}`
+            : `Record a ${noun} and the odometer reading.`
         }
         action={
-          <button onClick={() => setAdding(true)} className="btn-primary focus-ring rounded-lg px-4 py-2 text-sm font-medium">
-            Log charge
+          <button
+            onClick={() => setAdding(true)}
+            className="btn-primary focus-ring rounded-lg px-4 py-2 text-sm font-medium"
+          >
+            Log {noun}
           </button>
         }
       />
@@ -106,13 +146,16 @@ export default function Charges() {
         </GlassCard>
       )}
 
-      {sessions.length === 0 ? (
+      {events.length === 0 ? (
         <EmptyState
-          title="No charges logged yet"
-          body="Log your first charge with the odometer reading. Efficiency figures appear once there's a second one to measure against."
+          title={`No ${eventNoun(fuel, true)} logged yet`}
+          body={`Log your first ${noun} with the odometer reading. Consumption figures appear once there's a second one to measure against.`}
           action={
-            <button onClick={() => setAdding(true)} className="btn-primary focus-ring rounded-lg px-4 py-2 text-sm font-medium">
-              Log your first charge
+            <button
+              onClick={() => setAdding(true)}
+              className="btn-primary focus-ring rounded-lg px-4 py-2 text-sm font-medium"
+            >
+              Log your first {noun}
             </button>
           }
         />
@@ -122,7 +165,7 @@ export default function Charges() {
             <table className="w-full min-w-[56rem] text-sm">
               <thead>
                 <tr className="border-b border-edge text-left">
-                  {['Date', `Odometer (${units.distanceUnit})`, 'Since last', 'Added', 'Battery', 'Cost', units.efficiencyUnit, 'Charger', ''].map(h => (
+                  {columns.map(h => (
                     <th key={h} className="px-3 py-3 text-[11px] font-medium uppercase tracking-wider text-ink-3">
                       {h}
                     </th>
@@ -130,36 +173,46 @@ export default function Charges() {
                 </tr>
               </thead>
               <tbody>
-                {sessions.map(s => {
-                  const iv = intervalTo.get(s.id)
+                {events.map(e => {
+                  const iv = intervalTo.get(e.id)
+                  const consumption = consumptionCell(iv, vehicle, units)
+                  const added = [
+                    e.energy_kwh != null ? `${e.energy_kwh} kWh` : null,
+                    e.volume_litres != null ? `${e.volume_litres} L` : null,
+                  ].filter(Boolean).join(' · ')
+                  const levels = [
+                    e.soc_start_pct != null && e.soc_end_pct != null
+                      ? `${e.soc_start_pct}→${e.soc_end_pct}%`
+                      : null,
+                    e.tank_start_pct != null && e.tank_end_pct != null
+                      ? `${e.tank_start_pct}→${e.tank_end_pct}%`
+                      : null,
+                  ].filter(Boolean).join(' · ')
+
                   return (
-                    <tr key={s.id} className="border-b border-edge last:border-0">
+                    <tr key={e.id} className="border-b border-edge last:border-0">
                       <td className="readout px-3 py-3 text-ink-2">
-                        {s.date}
-                        {s.time_of_day && <span className="text-ink-3"> {s.time_of_day.slice(0, 5)}</span>}
+                        {e.date}
+                        {e.time_of_day && <span className="text-ink-3"> {e.time_of_day.slice(0, 5)}</span>}
                       </td>
                       <td className="readout px-3 py-3 font-medium text-ink">
-                        {units.distanceValue(s.odometer_km)}
+                        {units.distanceValue(e.odometer_km)}
                       </td>
                       <td className="readout px-3 py-3 text-ink-2">
                         {iv ? units.distance(iv.distance_km) : '—'}
                       </td>
-                      <td className="readout px-3 py-3 text-ink">{s.kwh_added} kWh</td>
-                      <td className="readout px-3 py-3 text-ink-2">
-                        {s.soc_start_pct != null && s.soc_end_pct != null
-                          ? `${s.soc_start_pct}→${s.soc_end_pct}%`
-                          : '—'}
-                      </td>
+                      <td className="readout px-3 py-3 text-ink">{added || '—'}</td>
+                      <td className="readout px-3 py-3 text-ink-2">{levels || '—'}</td>
                       <td className="readout px-3 py-3 text-ink">
-                        {s.cost != null ? `€${s.cost.toFixed(2)}` : '—'}
+                        {e.cost != null ? `€${e.cost.toFixed(2)}` : '—'}
                       </td>
                       <td className="readout px-3 py-3">
-                        {iv?.efficiency_kwh_per_100km != null ? (
+                        {consumption ? (
                           <span className="text-ink">
-                            {units.efficiency(iv.efficiency_kwh_per_100km)}
+                            {consumption.value}
                             {/* an approximated figure must say so, not look identical to a measured one */}
-                            {!iv.energy_is_exact && (
-                              <span title="Approximate — battery % wasn't recorded" className="text-ink-3"> ~</span>
+                            {!consumption.exact && (
+                              <span title="Approximate — the level either side wasn't recorded" className="text-ink-3"> ~</span>
                             )}
                           </span>
                         ) : (
@@ -167,16 +220,21 @@ export default function Charges() {
                         )}
                       </td>
                       <td className="px-3 py-3 text-ink-2">
-                        {CHARGER_LABEL[s.charger_type]}
-                        {s.location_city && <span className="text-ink-3"> · {s.location_city}</span>}
+                        {e.charger_type ? CHARGER_LABEL[e.charger_type] : ''}
+                        {e.location_city && (
+                          <span className="text-ink-3">
+                            {e.charger_type ? ' · ' : ''}{e.location_city}
+                          </span>
+                        )}
+                        {!e.charger_type && !e.location_city && '—'}
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex justify-end gap-1">
-                          <button onClick={() => setEditing(s)} className="focus-ring rounded px-2 py-1 text-xs text-ink-3 hover:text-ink">
+                          <button onClick={() => setEditing(e)} className="focus-ring rounded px-2 py-1 text-xs text-ink-3 hover:text-ink">
                             Edit
                           </button>
                           <button
-                            onClick={() => remove(s)}
+                            onClick={() => remove(e)}
                             className="focus-ring rounded px-2 py-1 text-xs hover:underline"
                             style={{ color: 'var(--critical)' }}
                           >
@@ -190,10 +248,10 @@ export default function Charges() {
               </tbody>
             </table>
           </div>
-          {intervals.some(i => !i.energy_is_exact) && (
+          {approximated && (
             <p className="border-t border-edge px-3 py-2.5 text-xs text-ink-3">
-              ~ marks an approximate figure: without the battery % either side, we assume the energy
-              added equals the energy used.
+              ~ marks an approximate figure: without the {electric ? 'battery' : 'fuel'} % either
+              side, we assume what went in equals what was used.
             </p>
           )}
         </GlassCard>
@@ -201,10 +259,10 @@ export default function Charges() {
 
       <Modal
         open={adding || editing !== null}
-        title={editing ? 'Edit charge' : 'Log charge'}
+        title={editing ? `Edit ${noun}` : `Log ${noun}`}
         onClose={() => { setAdding(false); setEditing(null) }}
       >
-        <ChargeForm
+        <FuelEventForm
           vehicles={owned}
           existing={editing ?? undefined}
           defaultVehicleId={selected ?? undefined}

@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.catalog import CatalogVehicle, CatalogSource
-from app.models.charging_session import ChargingSession
+from app.models.fuel_event import FuelEvent
 from app.models.fuel_price import FuelPrice
 from app.models.import_run import ImportRun, ImportStatus
 from app.models.tariff import ElectricityTariff
@@ -94,7 +94,7 @@ def overview(db: Session = Depends(get_db)):
             select(func.count()).select_from(User).where(User.role == UserRole.admin)
         ) or 0,
         vehicles=db.scalar(select(func.count()).select_from(Vehicle)) or 0,
-        charging_sessions=db.scalar(select(func.count()).select_from(ChargingSession)) or 0,
+        fuel_events=db.scalar(select(func.count()).select_from(FuelEvent)) or 0,
         fuel_prices=db.scalar(select(func.count()).select_from(FuelPrice)) or 0,
         tariffs=db.scalar(select(func.count()).select_from(ElectricityTariff)) or 0,
         tasks=[

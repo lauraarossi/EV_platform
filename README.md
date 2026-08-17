@@ -1,11 +1,17 @@
 # Eevie
 
-Track what an EV actually costs to run, and what the same driving would have
-cost in petrol — using real pump prices from the week you drove, not a guess.
+Track what your car actually costs to run, and what the same driving would have
+cost in a different one — using the real prices from the week you drove, not a
+guess.
 
-Built around one insight: **you log charges, not trips.** Each charge records the
-odometer and the battery percentage either side, and everything else (distance,
-energy used, efficiency, cost per km) is derived from consecutive charges.
+Built around one insight: **you log fill-ups, not trips.** Each one records the
+odometer and the level either side — battery percentage or fuel gauge — and
+everything else (distance, consumption, cost per km, CO2) is derived from
+consecutive events.
+
+Either car can be electric. An EV owner asking what petrol would have cost and
+a diesel owner asking what an EV would have saved are the same question from
+opposite ends, and the app answers both the same way.
 
 ---
 
@@ -83,7 +89,7 @@ frontend/
   src/
     api/         typed client per resource
     components/  shared UI (glass panels, forms, charts)
-    pages/       Garage · Charges · Stats · vs Petrol
+    pages/       Garage · Log · Stats · Compare
 scripts/         start-dev.sh, stop-dev.sh
 ```
 
@@ -102,6 +108,19 @@ Re-running is safe: it updates revised figures and never touches prices you
 entered yourself. Your own prices always win over the feed, and a city-specific
 price wins over the national average — so finer-grained sources can slot in
 later without a schema change.
+
+**Emissions** count the CO2 from burning the fuel and from generating the
+electricity, so the two sides are measured on the same terms. A litre is a
+physical constant (2,392 g for petrol, 2,640 g for diesel); electricity is not,
+so the grid's carbon intensity is a setting:
+
+```bash
+GRID_CO2_G_PER_KWH=250
+```
+
+The default is a round approximation of Ireland's recent average — replace it
+with a current published figure. Excluded, deliberately and visibly in the UI:
+refining, manufacturing, and the battery. This is not a lifecycle figure.
 
 **Electricity tariffs** are versioned rather than edited. When your rates
 change, add a new version with a new `effective_from`; the previous one is
@@ -154,7 +173,6 @@ catalogue looks the same either way — the previous rows are still there.
 
 - UI for managing tariffs and fuel prices (API only for now)
 - Auto-filling charge cost from the tariff
-- Tracking fuel-ups for a petrol car, to compare against a hypothetical EV
 - Weather integration
 - Model families: the EEA data files engine designations as model names, so
   Audi shows 107 "models" and BMW 154 (`320D`, `A6 50 TFSI E`)

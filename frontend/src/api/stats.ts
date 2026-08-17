@@ -12,15 +12,14 @@ export const getIntervals = (vehicleId: number) =>
 export const getComparison = (
   vehicleId: number,
   comparisonVehicleId: number,
-  fallbackPricePerLitre?: number
+  fallback?: { perLitre?: number; perKwh?: number },
 ) =>
   api
     .get<Comparison>(`/stats/vehicles/${vehicleId}/compare`, {
       params: {
         comparison_vehicle_id: comparisonVehicleId,
-        ...(fallbackPricePerLitre != null
-          ? { fallback_price_per_litre: fallbackPricePerLitre }
-          : {}),
+        ...(fallback?.perLitre != null ? { fallback_price_per_litre: fallback.perLitre } : {}),
+        ...(fallback?.perKwh != null ? { fallback_price_per_kwh: fallback.perKwh } : {}),
       },
     })
     .then(r => r.data)

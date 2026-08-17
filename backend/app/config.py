@@ -51,6 +51,14 @@ class Settings(BaseSettings):
     # the layout" — see services/vca_catalog.
     vca_data_dir: str = ""
 
+    # Grams of CO2 per kWh drawn from the grid, used to put an EV's emissions
+    # on the same footing as a petrol car's. Unlike the per-litre figures this
+    # is not a constant: it varies by country and falls year on year as
+    # renewables grow, so it is set here rather than hard-coded. The default is
+    # a round approximation of Ireland's recent average — replace it with a
+    # current published figure for your grid.
+    grid_co2_g_per_kwh: float = 250.0
+
     openweather_api_key: str = ""
     fuel_price_api_key: str = ""
 

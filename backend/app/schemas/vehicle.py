@@ -15,8 +15,10 @@ class VehicleBase(BaseModel):
     battery_capacity_kwh: float | None = Field(default=None, gt=0)
     onboard_charger_kw: float | None = Field(default=None, gt=0)
     wltp_range_km: float | None = Field(default=None, gt=0)
+    consumption_kwh_per_100km: float | None = Field(default=None, gt=0)
 
     engine_size_cc: int | None = Field(default=None, gt=0)
+    tank_capacity_litres: float | None = Field(default=None, gt=0)
     fuel_consumption_l_per_100km: float | None = Field(default=None, gt=0)
 
     horsepower: int | None = Field(default=None, gt=0)

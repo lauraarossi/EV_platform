@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     lifespan=lifespan,
     title="Eevie API",
-    description="Track EV usage, charging costs, and compare against petrol equivalents",
+    description="Track what your car costs to run, and what another one would have",
     version="0.1.0",
     # Replaced by a themed version in app/docs.py that follows the app's
     # light/dark preference.

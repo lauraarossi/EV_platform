@@ -48,7 +48,7 @@ class AdminOverview(BaseModel):
     users: int
     admins: int
     vehicles: int
-    charging_sessions: int
+    fuel_events: int
     fuel_prices: int
     tariffs: int
 

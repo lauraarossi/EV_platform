@@ -5,7 +5,7 @@ from app.api.v1.endpoints import (
     auth,
     health,
     vehicles,
-    charging,
+    fuel_events,
     stats,
     fuel_prices,
     tariffs,
@@ -19,10 +19,10 @@ router = APIRouter(prefix="/api/v1")
 router.include_router(health.router)
 router.include_router(auth.router)
 
-# Everything else requires an account. Vehicle, charging, stats and tariff
+# Everything else requires an account. Vehicle, fuel-event, stats and tariff
 # endpoints also scope their queries to the caller — this only gates the door.
 router.include_router(vehicles.router)
-router.include_router(charging.router)
+router.include_router(fuel_events.router)
 router.include_router(stats.router)
 router.include_router(tariffs.router)
 

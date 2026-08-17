@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { getVehicles, createVehicle, updateVehicle, deleteVehicle } from '../api/vehicles'
 import { getSummary } from '../api/stats'
-import type { Summary, Vehicle, VehicleInput } from '../types'
+import type { FuelType, Summary, Vehicle, VehicleInput } from '../types'
 import { TRANSMISSION_LABEL } from '../types'
+import { EventNoun, eventNoun, takesElectricity } from '../fuel'
 import { useAsync } from '../hooks/useAsync'
 import { useUnits } from '../hooks/useUnits'
 import PageHeader from '../components/PageHeader'
@@ -20,13 +21,20 @@ function Spec({ label, value }: { label: string; value: string }) {
   )
 }
 
-function StatusStrip({ s }: { s: Summary }) {
+function StatusStrip({ s, fuel }: { s: Summary; fuel: FuelType }) {
   const { units } = useUnits()
+  const electric = takesElectricity(fuel)
+  const consumption = electric
+    ? [s.avg_efficiency_kwh_per_100km, units.efficiency, units.efficiencyUnit] as const
+    : [s.avg_consumption_l_per_100km, units.consumption, units.consumptionUnit] as const
+
   const items: [string, string][] = [
     ['Odometer', units.distance(s.latest_odometer_km)],
-    ['Charges', String(s.session_count)],
-    ['Efficiency', s.avg_efficiency_kwh_per_100km != null
-      ? `${units.efficiency(s.avg_efficiency_kwh_per_100km)} ${units.efficiencyUnit}` : '—'],
+    [EventNoun(fuel, true), String(s.event_count)],
+    [
+      electric ? 'Efficiency' : 'Consumption',
+      consumption[0] != null ? `${consumption[1](consumption[0])} ${consumption[2]}` : '—',
+    ],
     ['Tracked', s.total_distance_km > 0 ? units.distance(s.total_distance_km) : '—'],
   ]
   return (
@@ -123,7 +131,7 @@ function VehicleCard({
           {v.kerb_weight_kg != null && <Spec label="Weight" value={units.weight(v.kerb_weight_kg)} />}
         </dl>
 
-        {!v.is_comparison_vehicle && summary && <StatusStrip s={summary} />}
+        {!v.is_comparison_vehicle && summary && <StatusStrip s={summary} fuel={v.fuel_type} />}
 
         <div className="mt-4 flex justify-end gap-2">
           <button onClick={onEdit} className="focus-ring rounded-lg border border-edge px-3 py-1.5 text-xs font-medium text-ink-2 hover:text-ink">
@@ -173,8 +181,10 @@ export default function Garage() {
   }
 
   const remove = async (v: Vehicle) => {
-    const n = summaries.get(v.id)?.session_count ?? 0
-    const warning = n > 0 ? `\n\nThis will also delete ${n} charge record${n === 1 ? '' : 's'}.` : ''
+    const n = summaries.get(v.id)?.event_count ?? 0
+    const warning = n > 0
+      ? `\n\nThis will also delete ${n} logged ${eventNoun(v.fuel_type, n !== 1)}.`
+      : ''
     if (!confirm(`Delete ${v.nickname || `${v.make} ${v.model}`}?${warning}`)) return
     await deleteVehicle(v.id)
     reload()
@@ -195,7 +205,7 @@ export default function Garage() {
       {vehicles.length === 0 ? (
         <EmptyState
           title="Your garage is empty"
-          body="Add your EV to start tracking what it really costs to run."
+          body="Add your car to start tracking what it really costs to run."
           action={
             <button onClick={() => setAdding(true)} className="btn-primary focus-ring rounded-lg px-4 py-2 text-sm font-medium">
               Add your EV

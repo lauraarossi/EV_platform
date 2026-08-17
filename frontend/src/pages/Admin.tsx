@@ -138,8 +138,8 @@ export default function Admin() {
         />
         <StatTile
           label="Logged"
-          value={overview.charging_sessions.toLocaleString('en-IE')}
-          unit="charges"
+          value={overview.fuel_events.toLocaleString('en-IE')}
+          unit="fill-ups"
           hint={`across ${overview.vehicles} vehicles`}
         />
         <StatTile

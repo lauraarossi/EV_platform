@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { getVehicles } from '../api/vehicles'
 import { getComparison } from '../api/stats'
+import { FUEL_LABEL, eventNoun, takesElectricity } from '../fuel'
 import { useAsync } from '../hooks/useAsync'
 import { useUnits } from '../hooks/useUnits'
 import PageHeader from '../components/PageHeader'
@@ -12,97 +13,126 @@ import { Loading, ErrorState, EmptyState } from '../components/States'
 const fmt = (n: number, d = 2) =>
   n.toLocaleString('en-IE', { minimumFractionDigits: d, maximumFractionDigits: d })
 
+const SUBTITLE = 'What the same driving would have cost in a different car.'
+
+/**
+ * Comparing running costs in either direction.
+ *
+ * Nothing here assumes which side is electric: an EV owner pricing petrol and
+ * a diesel owner pricing an EV are the same question asked from opposite ends,
+ * and the API answers both the same way.
+ */
 export default function Compare() {
   const { units } = useUnits()
-  const [evId, setEvId] = useState<number | null>(null)
-  const [petrolId, setPetrolId] = useState<number | null>(null)
+  const [mineId, setMineId] = useState<number | null>(null)
+  const [otherId, setOtherId] = useState<number | null>(null)
 
   const { data, error, loading, reload } = useAsync(async () => {
     const vehicles = await getVehicles()
     const owned = vehicles.filter(v => !v.is_comparison_vehicle)
-    const petrols = vehicles.filter(
-      v => v.is_comparison_vehicle && v.fuel_consumption_l_per_100km != null
+    // A comparison car needs the one figure the estimate rests on: a
+    // consumption rate, or for an EV a battery and range to derive one from.
+    const alternatives = vehicles.filter(
+      v =>
+        v.is_comparison_vehicle &&
+        (v.fuel_consumption_l_per_100km != null ||
+          v.consumption_kwh_per_100km != null ||
+          (v.battery_capacity_kwh != null && v.wltp_range_km != null)),
     )
-    const selectedEv = evId ?? owned[0]?.id ?? null
-    const selectedPetrol = petrolId ?? petrols[0]?.id ?? null
+    const selectedMine = mineId ?? owned[0]?.id ?? null
+    const selectedOther = otherId ?? alternatives[0]?.id ?? null
 
     const comparison =
-      selectedEv && selectedPetrol ? await getComparison(selectedEv, selectedPetrol) : null
+      selectedMine && selectedOther ? await getComparison(selectedMine, selectedOther) : null
 
-    return { owned, petrols, selectedEv, selectedPetrol, comparison }
-  }, [evId, petrolId])
+    return { owned, alternatives, selectedMine, selectedOther, comparison }
+  }, [mineId, otherId])
 
   if (loading) return <Loading label="Pricing your driving both ways…" />
   if (error) return <ErrorState message={error} onRetry={reload} />
   if (!data) return null
 
-  const { owned, petrols, selectedEv, selectedPetrol, comparison } = data
+  const { owned, alternatives, selectedMine, selectedOther, comparison } = data
 
   if (owned.length === 0) {
     return (
       <>
-        <PageHeader title="vs Petrol" subtitle="What the same driving would have cost in petrol." />
-        <EmptyState title="Add your EV first" body="Then add a petrol car to compare it against." />
-      </>
-    )
-  }
-
-  if (petrols.length === 0) {
-    return (
-      <>
-        <PageHeader title="vs Petrol" subtitle="What the same driving would have cost in petrol." />
+        <PageHeader title="Compare" subtitle={SUBTITLE} />
         <EmptyState
-          title="No comparison car set up"
-          body="In the Garage, add a petrol car with a consumption figure (L/100km) and tick “Comparison car”."
+          title="Add your car first"
+          body="Then add another car to compare it against — whatever it runs on."
         />
       </>
     )
   }
+
+  if (alternatives.length === 0) {
+    return (
+      <>
+        <PageHeader title="Compare" subtitle={SUBTITLE} />
+        <EmptyState
+          title="No comparison car set up"
+          body="In the Garage, add a car with a consumption figure — L/100km for petrol or diesel, kWh/100km for an electric one — and tick “Comparison car”."
+        />
+      </>
+    )
+  }
+
+  const mine = owned.find(v => v.id === selectedMine) ?? owned[0]
 
   if (!comparison || comparison.distance_km === 0) {
     return (
       <>
-        <PageHeader title="vs Petrol" subtitle="What the same driving would have cost in petrol." />
+        <PageHeader title="Compare" subtitle={SUBTITLE} />
         <EmptyState
           title="Not enough data yet"
-          body="Log at least two charges so there's a measured distance to price up."
+          body={`Log at least two ${eventNoun(mine.fuel_type, true)} so there's a measured distance to price up.`}
         />
       </>
     )
   }
 
-  const saved = comparison.saving >= 0
-  const priced = comparison.intervals.filter(i => i.petrol_cost != null)
+  const ahead = comparison.saving >= 0
+  const cleaner = comparison.co2_saving_kg >= 0
+  const priced = comparison.intervals.filter(i => i.cost != null)
+  const otherIsElectric = takesElectricity(comparison.comparison_fuel)
+  const otherFuel = FUEL_LABEL[comparison.comparison_fuel]
+  const priceNoun = otherIsElectric ? 'electricity rate' : 'pump price'
 
   return (
     <>
       <PageHeader
-        title="vs Petrol"
-        subtitle={`${units.distance(comparison.distance_km)} of real driving, priced at the pump rates that applied at the time.`}
+        title="Compare"
+        subtitle={`${units.distance(comparison.distance_km)} of real driving, priced at the ${
+          otherIsElectric ? 'electricity rates' : 'pump rates'
+        } that applied at the time.`}
       />
 
       <GlassCard className="mb-4 p-5">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Your EV">
-            <Select value={selectedEv ?? ''} onChange={e => setEvId(Number(e.target.value))}>
+          <Field label="Your car">
+            <Select value={selectedMine ?? ''} onChange={e => setMineId(Number(e.target.value))}>
               {owned.map(v => (
-                <option key={v.id} value={v.id}>{v.nickname || `${v.make} ${v.model}`}</option>
+                <option key={v.id} value={v.id}>
+                  {v.nickname || `${v.make} ${v.model}`} — {FUEL_LABEL[v.fuel_type]}
+                </option>
               ))}
             </Select>
           </Field>
           <Field label="Compared to">
-            <Select value={selectedPetrol ?? ''} onChange={e => setPetrolId(Number(e.target.value))}>
-              {petrols.map(v => (
+            <Select value={selectedOther ?? ''} onChange={e => setOtherId(Number(e.target.value))}>
+              {alternatives.map(v => (
                 <option key={v.id} value={v.id}>
-                  {v.make} {v.model} — {v.fuel_consumption_l_per_100km} L/100km
+                  {v.make} {v.model} — {FUEL_LABEL[v.fuel_type]}
                 </option>
               ))}
             </Select>
           </Field>
         </div>
         <p className="mt-3 text-xs text-ink-3">
-          Petrol prices come from the EU Weekly Oil Bulletin (Irish national average, updated
-          weekly). Add your own prices to override them for a date or city.
+          {otherIsElectric
+            ? 'Electricity is priced from your saved tariff for each date, taking its cheapest band — a car you don’t own has no charging history to say when it would have been plugged in.'
+            : 'Pump prices come from the EU Weekly Oil Bulletin (Irish national average, updated weekly). Add your own prices to override them for a date or city.'}
         </p>
       </GlassCard>
 
@@ -114,60 +144,114 @@ export default function Compare() {
             </svg>
             <p className="text-sm text-ink-2">
               {comparison.unpriced_intervals} interval
-              {comparison.unpriced_intervals === 1 ? ' has' : 's have'} no petrol price for that
+              {comparison.unpriced_intervals === 1 ? ' has' : 's have'} no {priceNoun} for that
               date, so {comparison.unpriced_intervals === 1 ? 'it is' : 'they are'} left out of the
-              total. Import the Oil Bulletin from the API, or add prices manually.
+              total.{' '}
+              {otherIsElectric
+                ? 'Add an electricity tariff covering those dates.'
+                : 'Refresh the EU fuel prices from the Admin tab, or add prices manually.'}
             </p>
           </div>
         </GlassCard>
       )}
 
       <section aria-label="Cost comparison" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile label="You paid" value={`€${fmt(comparison.ev_cost)}`} hint="Charging" />
         <StatTile
-          label="Petrol would cost"
-          value={`€${fmt(comparison.petrol_cost)}`}
-          hint={`${fmt(comparison.litres, 1)} litres`}
+          label="You paid"
+          value={`€${fmt(comparison.actual_cost)}`}
+          hint={FUEL_LABEL[mine.fuel_type]}
+        />
+        <StatTile
+          label={`${otherFuel} would cost`}
+          value={`€${fmt(comparison.alternative_cost)}`}
+          hint={`${fmt(comparison.quantity, 1)} ${comparison.unit_label}`}
           accent="var(--series-2)"
         />
         <StatTile
-          label={units.system === 'imperial' ? 'EV per mile' : 'EV per 100km'}
-          value={units.costPerDistance(comparison.ev_cost_per_100km)}
+          label={units.system === 'imperial' ? 'Yours per mile' : 'Yours per 100km'}
+          value={units.costPerDistance(comparison.actual_cost_per_100km)}
           accent="var(--accent-3)"
         />
         <StatTile
-          label={units.system === 'imperial' ? 'Petrol per mile' : 'Petrol per 100km'}
-          value={units.costPerDistance(comparison.petrol_cost_per_100km)}
+          label={units.system === 'imperial' ? 'Theirs per mile' : 'Theirs per 100km'}
+          value={units.costPerDistance(comparison.alternative_cost_per_100km)}
           accent="var(--series-2)"
         />
       </section>
+
+      <section aria-label="Emissions" className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatTile
+          label="You emitted"
+          value={comparison.actual_co2_kg != null ? fmt(comparison.actual_co2_kg, 1) : '—'}
+          unit="kg CO2"
+          hint={
+            comparison.actual_co2_g_per_km != null
+              ? `${fmt(comparison.actual_co2_g_per_km, 0)} g/km`
+              : undefined
+          }
+          accent="var(--accent-3)"
+        />
+        <StatTile
+          label={`${otherFuel} would emit`}
+          value={fmt(comparison.alternative_co2_kg, 1)}
+          unit="kg CO2"
+          hint={
+            comparison.alternative_co2_g_per_km != null
+              ? `${fmt(comparison.alternative_co2_g_per_km, 0)} g/km`
+              : undefined
+          }
+          accent="var(--series-2)"
+        />
+        <StatTile
+          label={cleaner ? 'CO2 avoided' : 'CO2 added'}
+          value={fmt(Math.abs(comparison.co2_saving_kg), 1)}
+          unit="kg"
+          hint={cleaner ? 'by driving yours' : 'over the alternative'}
+          accent={cleaner ? 'var(--good)' : 'var(--critical)'}
+        />
+        <StatTile
+          label="Grid intensity"
+          value={fmt(comparison.grid_co2_g_per_kwh, 0)}
+          unit="g/kWh"
+          hint="What electricity is assumed to cost the atmosphere"
+          accent="var(--accent-2)"
+        />
+      </section>
+
+      <p className="mt-2 text-xs text-ink-3">
+        Emissions count burning the fuel and generating the electricity. They exclude refining,
+        manufacturing and the battery, so this compares the two on the same terms rather than
+        claiming to be a full lifecycle figure.
+      </p>
 
       <GlassCard className="mt-4 p-6">
         <div className="flex items-start gap-3">
           {/* icon + label, so the status colour never carries the meaning alone */}
           <svg
             aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none"
-            stroke={saved ? 'var(--good)' : 'var(--critical)'}
+            stroke={ahead ? 'var(--good)' : 'var(--critical)'}
             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0"
           >
-            {saved ? <path d="M12 19V5M5 12l7-7 7 7" /> : <path d="M12 5v14M19 12l-7 7-7-7" />}
+            {ahead ? <path d="M12 19V5M5 12l7-7 7 7" /> : <path d="M12 5v14M19 12l-7 7-7-7" />}
           </svg>
           <div>
             <p className="text-sm font-medium text-ink">
-              {saved ? 'Cheaper to drive electric' : 'Petrol would have been cheaper'}
+              {ahead
+                ? `Cheaper than driving ${otherFuel.toLowerCase()}`
+                : `${otherFuel} would have been cheaper`}
             </p>
             <p className="readout mt-1 text-3xl font-semibold text-ink">
               €{fmt(Math.abs(comparison.saving))}
             </p>
             <p className="mt-1 text-sm text-ink-2">
-              {saved ? 'saved' : 'extra'} over {units.distance(comparison.distance_km)}
-              {comparison.petrol_cost > 0 &&
-                ` · ${fmt(Math.abs(comparison.saving / comparison.petrol_cost) * 100, 0)}% ${saved ? 'less' : 'more'}`}
+              {ahead ? 'saved' : 'extra'} over {units.distance(comparison.distance_km)}
+              {comparison.alternative_cost > 0 &&
+                ` · ${fmt(Math.abs(comparison.saving / comparison.alternative_cost) * 100, 0)}% ${ahead ? 'less' : 'more'}`}
             </p>
             <p className="mt-3 text-xs text-ink-3">
-              Against a {comparison.comparison_vehicle} at{' '}
-              {units.consumption(comparison.l_per_100km)} {units.consumptionUnit}. The
-              first charge is excluded — it paid for driving from before you started logging.
+              Against a {comparison.comparison_vehicle} at {comparison.basis}{' '}
+              {comparison.basis_label}. The first {eventNoun(mine.fuel_type)} is excluded — it paid
+              for driving from before you started logging.
             </p>
           </div>
         </div>
@@ -180,12 +264,19 @@ export default function Compare() {
               <caption className="px-4 pt-4 text-left text-sm font-semibold text-ink">
                 Priced interval by interval
                 <span className="ml-2 text-xs font-normal text-ink-3">
-                  each stretch at the pump price of the week it ended
+                  each stretch at the {priceNoun} that applied when it ended
                 </span>
               </caption>
               <thead>
                 <tr className="border-b border-edge text-left">
-                  {['Period', 'Distance', 'Litres', 'Price/L', 'Priced as of', 'Petrol cost'].map(h => (
+                  {[
+                    'Period',
+                    'Distance',
+                    comparison.unit_label,
+                    `Price/${comparison.unit_label}`,
+                    'Priced as of',
+                    `${otherFuel} cost`,
+                  ].map(h => (
                     <th key={h} className="px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-ink-3">{h}</th>
                   ))}
                 </tr>
@@ -195,13 +286,13 @@ export default function Compare() {
                   <tr key={`${i.start_date}-${i.end_date}`} className="border-b border-edge last:border-0">
                     <td className="readout px-4 py-3 text-ink-2">{i.start_date} → {i.end_date}</td>
                     <td className="readout px-4 py-3 text-ink">{units.distance(i.distance_km)}</td>
-                    <td className="readout px-4 py-3 text-ink-2">{fmt(i.litres, 1)}</td>
+                    <td className="readout px-4 py-3 text-ink-2">{fmt(i.quantity, 1)}</td>
                     <td className="readout px-4 py-3 text-ink">
-                      {i.price_per_litre != null ? `€${fmt(i.price_per_litre, 3)}` : '—'}
+                      {i.unit_price != null ? `€${fmt(i.unit_price, 3)}` : '—'}
                     </td>
                     <td className="readout px-4 py-3 text-ink-3">{i.price_as_of ?? '—'}</td>
                     <td className="readout px-4 py-3 font-medium text-ink">
-                      {i.petrol_cost != null ? `€${fmt(i.petrol_cost)}` : '—'}
+                      {i.cost != null ? `€${fmt(i.cost)}` : '—'}
                     </td>
                   </tr>
                 ))}

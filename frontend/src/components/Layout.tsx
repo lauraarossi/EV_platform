@@ -7,9 +7,9 @@ import { useAuth } from '../hooks/useAuth'
 // then compare. '/' stays the Charges route since logging is the frequent task.
 const navItems = [
   { to: '/garage', label: 'Garage' },
-  { to: '/', label: 'Charges' },
+  { to: '/', label: 'Log' },
   { to: '/stats', label: 'Stats' },
-  { to: '/compare', label: 'vs Petrol' },
+  { to: '/compare', label: 'Compare' },
 ]
 
 // Appended rather than placed in the run of tasks: it is a different kind of

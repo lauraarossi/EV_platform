@@ -42,7 +42,11 @@ export default function VehicleForm({
     battery_capacity_kwh: existing?.battery_capacity_kwh != null ? String(existing.battery_capacity_kwh) : '',
     onboard_charger_kw: existing?.onboard_charger_kw != null ? String(existing.onboard_charger_kw) : '',
     wltp_range_km: existing?.wltp_range_km != null ? String(existing.wltp_range_km) : '',
+    consumption_kwh_per_100km:
+      existing?.consumption_kwh_per_100km != null ? String(existing.consumption_kwh_per_100km) : '',
     engine_size_cc: existing?.engine_size_cc != null ? String(existing.engine_size_cc) : '',
+    tank_capacity_litres:
+      existing?.tank_capacity_litres != null ? String(existing.tank_capacity_litres) : '',
     fuel_consumption_l_per_100km: existing?.fuel_consumption_l_per_100km != null ? String(existing.fuel_consumption_l_per_100km) : '',
     horsepower: existing?.horsepower != null ? String(existing.horsepower) : '',
     zero_to_100_seconds: existing?.zero_to_100_seconds != null ? String(existing.zero_to_100_seconds) : '',
@@ -55,7 +59,8 @@ export default function VehicleForm({
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) =>
     setF(prev => ({ ...prev, [k]: e.target.value }))
 
-  const isEv = f.fuel_type === 'electric'
+  const hasBattery = f.fuel_type === 'electric' || f.fuel_type === 'hybrid'
+  const hasTank = f.fuel_type !== '' && f.fuel_type !== 'electric'
 
   /** Fill the form from a catalogue entry. Every field stays editable, and
    *  anything the catalogue lacks (charging specs, for instance) is left as
@@ -76,6 +81,9 @@ export default function VehicleForm({
       battery_capacity_kwh: str(c.battery_capacity_kwh) || prev.battery_capacity_kwh,
       onboard_charger_kw: str(c.onboard_charger_kw) || prev.onboard_charger_kw,
       wltp_range_km: str(c.wltp_range_km) || prev.wltp_range_km,
+      consumption_kwh_per_100km:
+        str(c.consumption_real_world_kwh_100km ?? c.consumption_wltp_kwh_100km) ||
+        prev.consumption_kwh_per_100km,
       engine_size_cc: str(c.engine_size_cc) || prev.engine_size_cc,
       fuel_consumption_l_per_100km:
         str(c.fuel_consumption_l_per_100km) || prev.fuel_consumption_l_per_100km,
@@ -100,11 +108,13 @@ export default function VehicleForm({
         transmission: (f.transmission || null) as VehicleInput['transmission'],
         nickname: f.nickname || null,
         image_url: f.image_url || null,
-        battery_capacity_kwh: isEv ? num(f.battery_capacity_kwh) : null,
-        onboard_charger_kw: isEv ? num(f.onboard_charger_kw) : null,
-        wltp_range_km: isEv ? num(f.wltp_range_km) : null,
-        engine_size_cc: isEv ? null : num(f.engine_size_cc),
-        fuel_consumption_l_per_100km: isEv ? null : num(f.fuel_consumption_l_per_100km),
+        battery_capacity_kwh: hasBattery ? num(f.battery_capacity_kwh) : null,
+        onboard_charger_kw: hasBattery ? num(f.onboard_charger_kw) : null,
+        wltp_range_km: hasBattery ? num(f.wltp_range_km) : null,
+        consumption_kwh_per_100km: hasBattery ? num(f.consumption_kwh_per_100km) : null,
+        engine_size_cc: hasTank ? num(f.engine_size_cc) : null,
+        tank_capacity_litres: hasTank ? num(f.tank_capacity_litres) : null,
+        fuel_consumption_l_per_100km: hasTank ? num(f.fuel_consumption_l_per_100km) : null,
         horsepower: num(f.horsepower),
         zero_to_100_seconds: num(f.zero_to_100_seconds),
         top_speed_kmh: num(f.top_speed_kmh),
@@ -194,8 +204,9 @@ export default function VehicleForm({
         </div>
       </div>
 
-      {f.fuel_type === '' ? null : isEv ? (
-        <div className="grid gap-4 sm:grid-cols-3">
+      {/* A hybrid gets both blocks: it has a battery and a tank. */}
+      {hasBattery && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="Battery (kWh)" hint="Needed for exact efficiency">
             <TextInput type="number" step="0.1" min="0" value={f.battery_capacity_kwh} onChange={set('battery_capacity_kwh')} placeholder="52" />
           </Field>
@@ -205,13 +216,21 @@ export default function VehicleForm({
           <Field label="WLTP range (km)">
             <TextInput type="number" step="1" min="0" value={f.wltp_range_km} onChange={set('wltp_range_km')} placeholder="409" />
           </Field>
+          <Field label="Consumption (kWh/100km)" hint="Used when comparing against this car">
+            <TextInput type="number" step="0.1" min="0" value={f.consumption_kwh_per_100km} onChange={set('consumption_kwh_per_100km')} placeholder="15.0" />
+          </Field>
         </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
+      )}
+
+      {hasTank && (
+        <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Engine (cc)">
             <TextInput type="number" step="1" min="0" value={f.engine_size_cc} onChange={set('engine_size_cc')} placeholder="1333" />
           </Field>
-          <Field label="Consumption (L/100km)" hint="Required for the petrol comparison">
+          <Field label="Tank (L)" hint="Needed for exact consumption">
+            <TextInput type="number" step="0.5" min="0" value={f.tank_capacity_litres} onChange={set('tank_capacity_litres')} placeholder="50" />
+          </Field>
+          <Field label="Consumption (L/100km)" hint="Used when comparing against this car">
             <TextInput type="number" step="0.1" min="0" value={f.fuel_consumption_l_per_100km} onChange={set('fuel_consumption_l_per_100km')} placeholder="6.0" />
           </Field>
         </div>

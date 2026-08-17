@@ -158,7 +158,7 @@ def test_google_rejects_an_unverifiable_credential(client, monkeypatch):
     "method,path",
     [
         ("get", "/api/v1/vehicles/"),
-        ("get", "/api/v1/charging/"),
+        ("get", "/api/v1/fuel-events/"),
         ("get", "/api/v1/tariffs/"),
         ("get", "/api/v1/catalog/makes"),
         ("get", "/api/v1/fuel-prices/"),
@@ -225,9 +225,9 @@ def test_cannot_edit_or_delete_someone_elses_vehicle(client, signed_in, other_cl
 def test_cannot_log_a_charge_against_someone_elses_vehicle(client, signed_in, other_client):
     theirs = make_vehicle(other_client, make="Nissan")
     r = client.post(
-        "/api/v1/charging/",
+        "/api/v1/fuel-events/",
         json={"vehicle_id": theirs["id"], "date": "2026-08-01", "odometer_km": 100,
-              "kwh_added": 10, "charger_type": "ac_home"},
+              "energy_kwh": 10, "charger_type": "ac_home"},
     )
     assert r.status_code == 404
 
@@ -236,12 +236,12 @@ def test_charges_are_private(client, signed_in, other_client):
     mine = make_vehicle(client)
     theirs = make_vehicle(other_client, make="Nissan")
     for c, v in ((client, mine), (other_client, theirs)):
-        c.post("/api/v1/charging/", json={
+        c.post("/api/v1/fuel-events/", json={
             "vehicle_id": v["id"], "date": "2026-08-01", "odometer_km": 100,
-            "kwh_added": 10, "charger_type": "ac_home"})
+            "energy_kwh": 10, "charger_type": "ac_home"})
 
-    assert len(client.get("/api/v1/charging/").json()) == 1
-    assert len(other_client.get("/api/v1/charging/").json()) == 1
+    assert len(client.get("/api/v1/fuel-events/").json()) == 1
+    assert len(other_client.get("/api/v1/fuel-events/").json()) == 1
 
 
 def test_cannot_read_someone_elses_stats(client, signed_in, other_client):
