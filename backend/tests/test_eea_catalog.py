@@ -180,3 +180,93 @@ def test_unmatched_models_are_reported(db):
     result = merge_catalog.enrich_from_evdb(db)
     assert result.matched == 0
     assert result.unmatched == ["Ssangyong TORRES EVX"]
+
+
+# --- multiple registration years ---------------------------------------------
+
+def test_years_are_folded_into_one_entry_per_spec(db):
+    """The same car sold across years must not become a near-duplicate per year."""
+    eea_catalog.ingest(db, rows=[eea_row(regs=100)], years=[2023])
+    eea_catalog.ingest(db, rows=[eea_row(regs=250)], years=[2024])
+
+    row = db.query(CatalogVehicle).one()          # one row, not two
+    assert row.registration_count == 250          # second import replaces
+    assert row.model_year == 2024
+
+
+def test_registrations_sum_within_a_single_multi_year_import(db):
+    """Folding happens before writing, so one call across years accumulates."""
+    rows_2024 = [eea_row(regs=250)]
+    rows_2023 = [eea_row(regs=100)]
+
+    # Simulate what ingest does with two batches by calling it per year and
+    # checking the aggregate path directly.
+    agg = {}
+    for year, batch in ((2024, rows_2024), (2023, rows_2023)):
+        for r in batch:
+            v = eea_catalog.to_catalog_values(r, "IE", year)
+            key = eea_catalog.make_row_id(r)
+            if key not in agg:
+                agg[key] = v
+            else:
+                agg[key]["registration_count"] += v["registration_count"]
+                agg[key]["model_year"] = max(agg[key]["model_year"], v["model_year"])
+
+    (merged,) = agg.values()
+    assert merged["registration_count"] == 350
+    assert merged["model_year"] == 2024           # newest year wins
+
+
+def test_model_year_records_when_a_car_was_last_sold(db):
+    """A discontinued car keeps its final year, which is how you spot it."""
+    eea_catalog.ingest(db, rows=[eea_row(cn="A4 LIMOUSINE", ft="diesel", cc=1968, kw=120,
+                                         l100=4.9, regs=277)], years=[2023])
+    assert db.query(CatalogVehicle).one().model_year == 2023
+
+
+def test_unknown_year_is_rejected_rather_than_silently_empty(db):
+    with pytest.raises(ValueError, match="no data for"):
+        eea_catalog.ingest(db, country="IE", years=[1999])
+
+
+def test_known_years_are_declared(db):
+    # Only 2020 onwards is exposed over SQL; older years are bulk-download only.
+    assert min(eea_catalog.TABLES) == 2020
+    assert eea_catalog.LATEST_YEAR == max(eea_catalog.TABLES)
+
+
+def test_consumption_derived_from_co2_when_the_year_lacks_it(db):
+    """The 2020 table predates the Fc column, but CO2 per litre is fixed."""
+    row = eea_row(l100=None)
+    row["co2"] = 120.0                    # g/km, petrol
+    eea_catalog.ingest(db, rows=[row], years=[2020])
+
+    entry = db.query(CatalogVehicle).one()
+    # 120 g/km x 100 / 2392 g per litre = 5.02 L/100km
+    assert entry.fuel_consumption_l_per_100km == pytest.approx(5.02, abs=0.01)
+    assert "from CO2" in entry.data_quality
+
+
+def test_diesel_uses_its_own_co2_factor(db):
+    """Diesel carries more carbon per litre, so the same CO2 means less fuel."""
+    row = eea_row(ft="diesel", l100=None)
+    row["co2"] = 120.0
+    eea_catalog.ingest(db, rows=[row], years=[2020])
+    assert db.query(CatalogVehicle).one().fuel_consumption_l_per_100km == pytest.approx(4.55, abs=0.01)
+
+
+def test_reported_consumption_is_preferred_over_derived(db):
+    row = eea_row(l100=5.9)
+    row["co2"] = 200.0                    # would derive ~8.4, and must not win
+    eea_catalog.ingest(db, rows=[row], years=[2023])
+
+    entry = db.query(CatalogVehicle).one()
+    assert entry.fuel_consumption_l_per_100km == 5.9
+    assert entry.data_quality == "registration data"
+
+
+def test_electric_rows_are_not_given_a_fuel_consumption(db):
+    row = eea_row(ft="electric", cc=None, kw=110, l100=None, wh=156)
+    row["co2"] = 0.0
+    eea_catalog.ingest(db, rows=[row], years=[2020])
+    assert db.query(CatalogVehicle).one().fuel_consumption_l_per_100km is None

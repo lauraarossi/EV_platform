@@ -38,12 +38,35 @@ from app.models.catalog import CatalogVehicle, CatalogSource
 from app.models.vehicle import FuelType, Transmission
 
 SQL_ENDPOINT = "https://discodata.eea.europa.eu/sql"
-TABLE = "[CO2Emission].[latest].[co2cars_2025Pv31]"
+
+# One table per registration year, discovered by probing the endpoint: the
+# names follow co2cars_{year}{F|P}v{n}, where F is the final dataset and P the
+# provisional one, and n increments by two per year. Only 2020 onwards is
+# exposed over SQL — earlier years exist solely as bulk downloads.
+#
+# Newest first, because ingest walks them in order and keeps the most recent
+# year a given spec appeared in.
+TABLES: dict[int, str] = {
+    2025: "co2cars_2025Pv31",   # provisional; the final is not published yet
+    2024: "co2cars_2024Fv30",
+    2023: "co2cars_2023Fv28",
+    2022: "co2cars_2022Fv26",
+    2021: "co2cars_2021Fv24",
+    2020: "co2cars_2020Fv22",
+}
+LATEST_YEAR = max(TABLES)
 SOURCE_NAME = "EEA CO2 monitoring (Regulation EU 2019/631)"
 SOURCE_URL = "https://www.eea.europa.eu/en/datahub/datahubitem-view/fa8b1229-3db6-495d-b18e-9c9b3267c02b"
 LICENCE = "EEA open data"
 
 KW_TO_HP = 1.35962
+
+# The 2020 table predates the Fc (fuel consumption) column, but every year
+# reports WLTP CO2. Burning a litre of fuel releases a fixed amount of CO2, so
+# consumption can be recovered from it. These are the standard EU type-approval
+# factors, in grams of CO2 per litre.
+CO2_PER_LITRE = {FuelType.petrol: 2392.0, FuelType.diesel: 2640.0}
+YEARS_WITHOUT_FC = {2020}
 
 # The dataset's fuel labels, mapped onto ours. Plug-in hybrids appear as
 # "petrol/electric"; we record them as hybrid.
@@ -60,6 +83,7 @@ FUEL_MAP = {
 @dataclass
 class EeaImportResult:
     country: str
+    years: list[int]
     fetched: int
     inserted: int
     updated: int
@@ -67,32 +91,53 @@ class EeaImportResult:
     models: int
 
 
-def build_query(country: str, min_registrations: int) -> str:
+def build_query(table: str, country: str, min_registrations: int, year: int) -> str:
     """Group raw registrations into distinct specs.
 
     One row per (make, name, fuel, capacity, power, consumption, mass) rather
     than per registration, which turns ~125k Irish rows into ~1k specs.
     """
+    # Older tables have no Fc column at all; selecting it would error rather
+    # than return nulls, so it is omitted and derived from CO2 instead.
+    has_fc = year not in YEARS_WITHOUT_FC
+    fc_select = "[Fc] AS l100," if has_fc else "NULL AS l100,"
+    fc_group = ", [Fc]" if has_fc else ""
+
     return f"""
         SELECT [Mk], [Cn], [Ft], [Ec (cm3)] AS cc, [Ep (KW)] AS kw,
-               [Fc] AS l100, [M (kg)] AS kg, [Z (Wh/km)] AS wh_km,
+               {fc_select} [M (kg)] AS kg, [Z (Wh/km)] AS wh_km,
+               [Ewltp (g/km)] AS co2,
                COUNT(*) AS regs
-        FROM {TABLE}
+        FROM [CO2Emission].[latest].[{table}]
         WHERE [MS] = '{country}' AND [Mk] IS NOT NULL AND [Cn] IS NOT NULL
-        GROUP BY [Mk], [Cn], [Ft], [Ec (cm3)], [Ep (KW)], [Fc], [M (kg)], [Z (Wh/km)]
+        GROUP BY [Mk], [Cn], [Ft], [Ec (cm3)], [Ep (KW)]{fc_group}, [M (kg)],
+                 [Z (Wh/km)], [Ewltp (g/km)]
         HAVING COUNT(*) >= {min_registrations}
     """.strip()
 
 
-def fetch(country: str = "IE", min_registrations: int = 3, timeout: float = 180.0) -> list[dict]:
+def fetch_year(
+    year: int, country: str = "IE", min_registrations: int = 3, timeout: float = 240.0
+) -> list[dict]:
+    table = TABLES.get(year)
+    if table is None:
+        raise ValueError(f"no table for {year}; available: {sorted(TABLES)}")
+
     with httpx.Client(timeout=timeout, follow_redirects=True) as client:
-        r = client.get(SQL_ENDPOINT, params={"query": build_query(country, min_registrations)})
+        r = client.get(
+            SQL_ENDPOINT, params={"query": build_query(table, country, min_registrations, year)}
+        )
         r.raise_for_status()
         payload = r.json()
 
     if "results" not in payload:
-        raise ValueError(f"unexpected response from EEA: {str(payload)[:200]}")
+        raise ValueError(f"unexpected response from EEA for {year}: {str(payload)[:200]}")
     return payload["results"]
+
+
+def fetch(country: str = "IE", min_registrations: int = 3, timeout: float = 240.0) -> list[dict]:
+    """Just the newest year — kept for callers that only want current cars."""
+    return fetch_year(LATEST_YEAR, country, min_registrations, timeout)
 
 
 def _clean(text: str) -> str:
@@ -124,7 +169,7 @@ def make_row_id(row: dict) -> str:
     return re.sub(r"[^a-z0-9\-.]", "", slug.lower())[:160]
 
 
-def describe_variant(row: dict) -> str:
+def describe_variant(row: dict, litres: float | None = None) -> str:
     """A human label, since the dataset has no trim names."""
     bits = []
     if row.get("cc"):
@@ -134,13 +179,16 @@ def describe_variant(row: dict) -> str:
     fuel = _clean(row.get("Ft")).replace("/", "/")
     if fuel:
         bits.append(fuel)
-    if row.get("l100"):
-        bits.append(f"{float(row['l100']):.1f} L/100km")
+    consumption = litres if litres is not None else (
+        float(row["l100"]) if row.get("l100") else None
+    )
+    if consumption:
+        bits.append(f"{consumption:.1f} L/100km")
     label = " · ".join(bits)
     return f"{_clean(row['Cn'])} ({label})" if label else _clean(row["Cn"])
 
 
-def to_catalog_values(row: dict, country: str) -> dict | None:
+def to_catalog_values(row: dict, country: str, year: int | None = None) -> dict | None:
     fuel = FUEL_MAP.get(_clean(row.get("Ft")).lower())
     if fuel is None:
         return None  # unknown fuel label — skip rather than guess
@@ -148,17 +196,24 @@ def to_catalog_values(row: dict, country: str) -> dict | None:
     kw = row.get("kw")
     is_electric = fuel == FuelType.electric
 
+    litres = float(row["l100"]) if row.get("l100") else None
+    derived = False
+    if litres is None and row.get("co2") and fuel in CO2_PER_LITRE:
+        # g/km -> litres/100km via the fixed CO2 content of a litre of fuel.
+        litres = round(float(row["co2"]) * 100.0 / CO2_PER_LITRE[fuel], 2)
+        derived = True
+
     return {
         "make": _title(row["Mk"]),
         "model": _clean(row["Cn"]),
-        "variant": describe_variant(row),
-        "model_year": None,
+        "variant": describe_variant(row, litres),
+        "model_year": year,
         "fuel_type": fuel,
         # EVs are single-speed; for combustion the dataset says nothing, so
         # leave it blank rather than assert a gearbox it never recorded.
         "transmission": Transmission.single_speed.value if is_electric else None,
         "engine_size_cc": int(row["cc"]) if row.get("cc") else None,
-        "fuel_consumption_l_per_100km": float(row["l100"]) if row.get("l100") else None,
+        "fuel_consumption_l_per_100km": litres,
         "horsepower": round(float(kw) * KW_TO_HP) if kw else None,
         "kerb_weight_kg": int(row["kg"]) if row.get("kg") else None,
         # Wh/km -> kWh/100km
@@ -167,7 +222,8 @@ def to_catalog_values(row: dict, country: str) -> dict | None:
         ),
         "country": country,
         "registration_count": int(row.get("regs") or 0),
-        "data_quality": "registration data",
+        "data_quality": "registration data (consumption from CO2)" if derived
+        else "registration data",
     }
 
 
@@ -175,11 +231,55 @@ def ingest(
     db: Session,
     country: str = "IE",
     min_registrations: int = 3,
+    years: list[int] | None = None,
     rows: list[dict] | None = None,
 ) -> EeaImportResult:
-    if rows is None:
-        rows = fetch(country=country, min_registrations=min_registrations)
+    """Import one or more registration years.
 
+    The same car sold across several years would otherwise appear as a
+    near-duplicate per year, cluttering the picker. So every year is folded
+    into one entry per spec first, then written once: registrations are summed
+    across years, and `model_year` keeps the most recent year the spec was
+    still being sold — which is what marks a car as discontinued.
+    """
+    if rows is not None:
+        # Direct rows are used by the tests; treat them as a single year.
+        batches = [(years[0] if years else LATEST_YEAR, rows)]
+    else:
+        wanted = sorted(years or [LATEST_YEAR], reverse=True)
+        unknown = [y for y in wanted if y not in TABLES]
+        if unknown:
+            raise ValueError(f"no data for {unknown}; available: {sorted(TABLES)}")
+        batches = [
+            (year, fetch_year(year, country=country, min_registrations=min_registrations))
+            for year in wanted
+        ]
+
+    # --- fold every year into one entry per spec ---------------------------
+    aggregated: dict[str, dict] = {}
+    fetched = 0
+
+    for year, batch in batches:
+        fetched += len(batch)
+        for row in batch:
+            values = to_catalog_values(row, country, year)
+            if values is None:
+                continue
+
+            row_id = make_row_id(row)
+            seen = aggregated.get(row_id)
+            if seen is None:
+                aggregated[row_id] = values
+                continue
+
+            seen["registration_count"] = (seen.get("registration_count") or 0) + (
+                values.get("registration_count") or 0
+            )
+            # Newest wins, whatever order the batches arrived in.
+            if (values.get("model_year") or 0) > (seen.get("model_year") or 0):
+                seen["model_year"] = values["model_year"]
+
+    # --- write ------------------------------------------------------------
     existing = {
         c.id: c
         for c in db.scalars(
@@ -188,18 +288,7 @@ def ingest(
     }
 
     inserted = updated = 0
-    seen: set[str] = set()
-
-    for row in rows:
-        values = to_catalog_values(row, country)
-        if values is None:
-            continue
-
-        row_id = make_row_id(row)
-        if row_id in seen:
-            continue
-        seen.add(row_id)
-
+    for row_id, values in aggregated.items():
         current = existing.get(row_id)
         if current is None:
             db.add(
@@ -225,9 +314,10 @@ def ingest(
 
     return EeaImportResult(
         country=country,
-        fetched=len(rows),
+        years=[y for y, _ in batches],
+        fetched=fetched,
         inserted=inserted,
         updated=updated,
-        makes=len({_title(r["Mk"]) for r in rows}),
-        models=len({(_title(r["Mk"]), _clean(r["Cn"])) for r in rows}),
+        makes=len({v["make"] for v in aggregated.values()}),
+        models=len({(v["make"], v["model"]) for v in aggregated.values()}),
     )

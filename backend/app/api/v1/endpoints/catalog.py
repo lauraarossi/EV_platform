@@ -87,6 +87,12 @@ def get_entry(catalog_id: str, db: Session = Depends(get_db)):
     return entry
 
 
+@router.get("/years")
+def available_years():
+    """Which registration years can be imported."""
+    return {"years": sorted(eea_catalog.TABLES), "latest": eea_catalog.LATEST_YEAR}
+
+
 @router.get("/lookup/registration")
 def lookup_registration(reg: str = Query(..., min_length=4, max_length=16)):
     """Decode an Irish plate. Year and county come from the plate itself; make
@@ -111,13 +117,29 @@ def import_eea(
     min_registrations: int = Query(
         default=3, ge=1, description="Drop one-off variants below this many registrations"
     ),
+    years: str = Query(
+        default="all",
+        description="Comma-separated registration years, or 'all' for every year available",
+    ),
     db: Session = Depends(get_db),
 ):
     """Pull specs from the EEA CO2 monitoring dataset — the only free source
-    covering petrol and diesel for European models."""
+    covering petrol and diesel for European models.
+
+    Importing several years is what turns up cars no longer sold new: an Audi
+    A4, for instance, stopped appearing after 2023.
+    """
+    if years.strip().lower() == "all":
+        wanted = sorted(eea_catalog.TABLES)
+    else:
+        try:
+            wanted = [int(y) for y in years.split(",") if y.strip()]
+        except ValueError:
+            raise HTTPException(status_code=422, detail="years must be numbers or 'all'")
+
     try:
         result = eea_catalog.ingest(
-            db, country=country.upper(), min_registrations=min_registrations
+            db, country=country.upper(), min_registrations=min_registrations, years=wanted
         )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Import failed: {exc}") from exc
