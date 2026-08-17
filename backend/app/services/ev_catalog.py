@@ -69,6 +69,40 @@ def download_snapshot(timeout: float = 300.0) -> tuple[bytes, str | None]:
         return r.content, tag
 
 
+# Words that sit between the model name and the actual trim in evdb's variant
+# names: "Renault 4 E-Tech Electric Techno 52" -> "Techno 52".
+_TRIM_NOISE = ("electric", "e-tech", "etech", "e-tron", "etron", "bev", "ev")
+
+
+def derive_trim(variant: str, make: str, model: str) -> str | None:
+    """Pull the trim out of a variant name, or None if nothing is left.
+
+    evdb has no trim column; the trim is embedded in the variant name after
+    the make and model. Stripping those, plus the marketing words, leaves the
+    part a person would recognise as the trim.
+    """
+    rest = (variant or "").strip()
+    for prefix in (f"{make} {model}", model, make):
+        if prefix and rest.lower().startswith(prefix.lower()):
+            rest = rest[len(prefix):].strip()
+            break
+
+    # The variant doesn't always repeat the model name verbatim — evdb has
+    # "Renault Megane E-Tech EV60 Iconic" against the model "Megane E-Tech
+    # Electric". So drop any leading words that belong to the model or are
+    # marketing filler, until something new appears.
+    model_words = {w.lower().strip("-") for w in (model or "").split()}
+    words = rest.split()
+    while words and (
+        words[0].lower().strip("-") in model_words
+        or words[0].lower().strip("-") in _TRIM_NOISE
+    ):
+        words.pop(0)
+
+    trimmed = " ".join(words).strip(" -–·")
+    return trimmed or None
+
+
 def _hp(kw: float | None) -> int | None:
     return round(kw * KW_TO_HP) if kw else None
 
@@ -128,6 +162,9 @@ FIELDS = (
 
 def to_catalog_values(row: dict) -> dict:
     values = {f: row.get(f) for f in FIELDS}
+    values["trim"] = derive_trim(
+        row.get("variant") or "", row.get("make") or "", row.get("model") or ""
+    )
     values["horsepower"] = _hp(row.get("total_power_kw"))
     values["fuel_type"] = FuelType.electric
     # Effectively every EV in the set is single-speed; the user can override.

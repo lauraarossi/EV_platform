@@ -99,6 +99,7 @@ export interface CatalogVehicle {
   make: string
   model: string
   variant: string
+  trim: string | null
   model_year: number | null
   fuel_type: FuelType
   transmission: Transmission | null

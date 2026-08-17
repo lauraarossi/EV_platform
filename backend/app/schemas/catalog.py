@@ -24,6 +24,7 @@ class CatalogVehicleRead(BaseModel):
     make: str
     model: str
     variant: str
+    trim: str | None
     model_year: int | None
 
     fuel_type: FuelType

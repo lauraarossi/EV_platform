@@ -36,6 +36,10 @@ class CatalogVehicle(Base, TimestampMixin):
     make: Mapped[str] = mapped_column(String(100), index=True)
     model: Mapped[str] = mapped_column(String(120), index=True)
     variant: Mapped[str] = mapped_column(String(200))
+    # Only set where the source actually carries one. The EEA data has no trim
+    # names at all, so it stays null there rather than being invented from the
+    # engine label.
+    trim: Mapped[str | None] = mapped_column(String(120))
     model_year: Mapped[int | None] = mapped_column(Integer, index=True)
 
     fuel_type: Mapped[FuelType] = mapped_column(Enum(FuelType), index=True)

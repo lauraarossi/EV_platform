@@ -178,3 +178,30 @@ def test_missing_power_leaves_horsepower_null(db):
     )])
     ev_catalog.ingest(db, db_bytes=snap)
     assert db.get(CatalogVehicle, "x-1").horsepower is None
+
+
+# --- trim names ---------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "variant,make,model,expected",
+    [
+        ("Renault 4 E-Tech Electric Techno 52", "Renault", "4 E-Tech", "Techno 52"),
+        ("Renault 4 E-Tech Electric Evolution 40", "Renault", "4 E-Tech", "Evolution 40"),
+        ("Audi Q4 e-tron 45", "Audi", "Q4 e-tron", "45"),
+        # The variant doesn't always repeat the model name exactly.
+        ("Renault Megane E-Tech EV60 Iconic", "Renault", "Megane E-Tech Electric", "EV60 Iconic"),
+        ("Renault Scenic E-Tech Comfort Range", "Renault", "Scenic E-Tech Electric", "Comfort Range"),
+        ("Renault Zoe ZE50 R135", "Renault", "Zoe", "ZE50 R135"),
+        # Nothing beyond the model name means there is no trim to report.
+        ("Renault Zoe", "Renault", "Zoe", None),
+        ("Zoe", "Renault", "Zoe", None),
+    ],
+)
+def test_trim_is_pulled_out_of_the_variant_name(variant, make, model, expected):
+    assert ev_catalog.derive_trim(variant, make, model) == expected
+
+
+def test_trim_is_stored_on_import(db):
+    ev_catalog.ingest(db, db_bytes=build_snapshot())
+    entry = db.get(CatalogVehicle, "renault-4-e-tech-techno-52-2025")
+    assert entry.trim == "Techno 52"

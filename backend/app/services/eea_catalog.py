@@ -207,6 +207,9 @@ def to_catalog_values(row: dict, country: str, year: int | None = None) -> dict 
         "make": _title(row["Mk"]),
         "model": _clean(row["Cn"]),
         "variant": describe_variant(row, litres),
+        # This dataset has no trim names — Cn is the commercial name. Leaving
+        # it null is honest; stuffing the engine label in here was not.
+        "trim": None,
         "model_year": year,
         "fuel_type": fuel,
         # EVs are single-speed; for combustion the dataset says nothing, so

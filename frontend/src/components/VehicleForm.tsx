@@ -65,9 +65,10 @@ export default function VehicleForm({
     setF(prev => ({
       ...prev,
       make: c.make,
-      // The catalogue's variant name carries the trim, e.g. "…Techno 52".
       model: c.model,
-      trim: c.variant.replace(`${c.make} ${c.model}`, '').trim() || prev.trim,
+      // Derived at ingest, where the source is known. The EEA data has no trim
+      // names, so this is null there rather than the engine label.
+      trim: c.trim ?? prev.trim,
       year: c.model_year ? String(c.model_year) : prev.year,
       fuel_type: c.fuel_type,
       transmission: c.transmission ?? prev.transmission,

@@ -270,3 +270,12 @@ def test_electric_rows_are_not_given_a_fuel_consumption(db):
     row["co2"] = 0.0
     eea_catalog.ingest(db, rows=[row], years=[2020])
     assert db.query(CatalogVehicle).one().fuel_consumption_l_per_100km is None
+
+
+def test_eea_rows_have_no_trim(db):
+    """The engine label is not a trim; claiming otherwise put
+    'CAPTUR (999cc · 91hp · petrol · 5.9 L/100km)' in the trim field."""
+    eea_catalog.ingest(db, rows=[eea_row()])
+    entry = db.query(CatalogVehicle).one()
+    assert entry.trim is None
+    assert "999cc" in entry.variant      # the detail still lives in the label
