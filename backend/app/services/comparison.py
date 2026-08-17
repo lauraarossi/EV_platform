@@ -76,6 +76,12 @@ class Comparison:
     your_basis_quoted: float
     your_basis_measured: float | None
     measured_weight: float
+    # How far above (or below) its brochure figure your car is being taken,
+    # and whether the other car was lifted by the same amount. Applying it to
+    # both is what keeps them comparable while still describing real driving.
+    real_world_gap: float | None
+    gap_applied: bool
+    basis_quoted: float
     basis: float
     basis_label: str
 
@@ -139,6 +145,19 @@ def _price_electric(
         tariff, rate = found
         return rate.price_per_kwh, tariff.effective_from.isoformat(), True
     return fallback, None, True
+
+
+def _market_price(
+    db: Session, user_id: int, vehicle: Vehicle, day: datetime.date, region: str,
+    country: str, fallback_litre: float | None, fallback_kwh: float | None,
+) -> tuple[float | None, str | None, bool]:
+    """The going rate for whatever this car buys, on a given date."""
+    if vehicle.fuel_type == FuelType.electric:
+        return _price_electric(db, user_id, day, fallback_kwh)
+    return _price_liquid(
+        db, day, region, FUEL_KIND.get(vehicle.fuel_type, FuelKind.petrol_95),
+        country, fallback_litre,
+    )
 
 
 def _price_liquid(
@@ -228,6 +247,7 @@ def compare(
     driven_vehicle: Vehicle,
     measured_consumption: float | None = None,
     measured_weight: float = 0.0,
+    apply_gap_to_alternative: bool = False,
     country: str = "IE",
     fallback_price_per_litre: float | None = None,
     fallback_price_per_kwh: float | None = None,
@@ -241,15 +261,21 @@ def compare(
     numbers were arrived at.
     """
     your_quoted, your_unit, your_unit_label, _ = consumption_of(driven_vehicle)
-    their_rate, unit, unit_label, basis_label = consumption_of(comparison_vehicle)
+    their_quoted, unit, unit_label, basis_label = consumption_of(comparison_vehicle)
     your_rate = blend(your_quoted, measured_consumption, measured_weight)
+
+    # The gap between what your car is quoted at and where it is being taken.
+    # Lifting the other car by the same proportion keeps the two comparable:
+    # scale both and identical cars still come out identical, which is exactly
+    # what moving your side alone destroys.
+    gap = round(your_rate / your_quoted, 3) if your_quoted else None
+    lift = bool(apply_gap_to_alternative and gap and gap != 1.0)
+    their_rate = round(their_quoted * gap, 2) if lift else their_quoted
 
     # Same *fuel*, not merely the same unit: petrol and diesel are both litres
     # but are bought at different pumps, and have diverged by 20c before now.
     same_fuel = _price_basis(driven_vehicle) == _price_basis(comparison_vehicle)
     electric = comparison_vehicle.fuel_type == FuelType.electric
-    fallback = fallback_price_per_kwh if electric else fallback_price_per_litre
-    kind = FUEL_KIND.get(comparison_vehicle.fuel_type, FuelKind.petrol_95)
 
     priced: list[PricedInterval] = []
     your_total = their_total = 0.0
@@ -264,19 +290,31 @@ def compare(
         their_quantity += theirs
 
         # What you paid is the best price there is, so it is used for your car
-        # and — when the other runs on the same fuel — for that one too.
+        # and — when the other runs on the same fuel — for that one too. Where
+        # there is no receipt (a distance picked rather than driven), each car
+        # falls back to the going rate for its *own* fuel. Falling back to the
+        # other car's left the first side unpriced whenever the two differed.
+        region = iv.location_city or ""
         paid = _paid_unit_price(iv)
 
         if paid is not None and same_fuel:
             unit_price, as_of, is_estimate = paid, iv.end_date, False
-        elif electric:
-            unit_price, as_of, is_estimate = _price_electric(db, user_id, day, fallback)
         else:
-            unit_price, as_of, is_estimate = _price_liquid(
-                db, day, iv.location_city or "", kind, country, fallback
+            unit_price, as_of, is_estimate = _market_price(
+                db, user_id, comparison_vehicle, day, region, country,
+                fallback_price_per_litre, fallback_price_per_kwh,
             )
 
-        your_price = paid if paid is not None else (unit_price if same_fuel else None)
+        if paid is not None:
+            your_price = paid
+        elif same_fuel:
+            your_price = unit_price
+        else:
+            your_price, _, _ = _market_price(
+                db, user_id, driven_vehicle, day, region, country,
+                fallback_price_per_litre, fallback_price_per_kwh,
+            )
+
         if as_of is None and unit_price is not None:
             used_fallback = True
 
@@ -344,6 +382,9 @@ def compare(
         measured_weight=(
             round(min(measured_weight, 1.0), 2) if measured_consumption else 0.0
         ),
+        real_world_gap=gap if gap and gap != 1.0 else None,
+        gap_applied=lift,
+        basis_quoted=their_quoted,
         basis=their_rate,
         basis_label=basis_label,
         actual_spend=spend,

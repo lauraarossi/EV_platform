@@ -432,3 +432,119 @@ def test_a_plain_distance_is_priced_at_the_chosen_day(db):
 
     assert june.intervals[0].unit_price == pytest.approx(1.50)
     assert july.intervals[0].unit_price == pytest.approx(2.00)
+
+
+# --- carrying the real-world gap across ---------------------------------------
+#
+# Moving your car towards what it actually achieves leaves the other on its
+# brochure figure, which flatters it. Lifting both by the same proportion keeps
+# them comparable while describing real driving rather than a test cycle.
+
+def test_lifting_both_keeps_identical_cars_identical(db):
+    """The property that makes this safe, and the one moving your side alone
+    destroys."""
+    mine = petrol(db, 7.0)
+    theirs = petrol(db, 7.0)
+    intervals = [FakeInterval("2026-06-01", "2026-06-20", 500.0, cost=90.0, litres_added=45.0)]
+
+    result = comparison.compare(db, ensure_user(db).id, intervals, theirs,
+                                driven_vehicle=mine, measured_consumption=9.0,
+                                measured_weight=1.0, apply_gap_to_alternative=True)
+
+    assert result.your_basis == 9.0 and result.basis == 9.0
+    assert result.saving == 0.0 and result.co2_saving_kg == 0.0
+
+
+def test_the_gap_is_a_proportion_not_a_shift(db):
+    """A car quoted a quarter thriftier stays a quarter thriftier."""
+    mine = petrol(db, 8.0)
+    theirs = petrol(db, 6.0)
+    intervals = [FakeInterval("2026-06-01", "2026-06-20", 1000.0, cost=160.0, litres_added=80.0)]
+
+    result = comparison.compare(db, ensure_user(db).id, intervals, theirs,
+                                driven_vehicle=mine, measured_consumption=10.0,
+                                measured_weight=1.0, apply_gap_to_alternative=True)
+
+    assert result.real_world_gap == pytest.approx(1.25)     # 10.0 against 8.0
+    assert result.basis == pytest.approx(7.5)               # 6.0 lifted by a quarter
+    assert result.basis / result.your_basis == pytest.approx(6.0 / 8.0)
+
+
+def test_without_the_lift_the_other_car_keeps_its_brochure_figure(db):
+    mine = petrol(db, 7.0)
+    theirs = petrol(db, 7.0)
+    intervals = [FakeInterval("2026-06-01", "2026-06-20", 500.0, cost=90.0, litres_added=45.0)]
+
+    result = comparison.compare(db, ensure_user(db).id, intervals, theirs,
+                                driven_vehicle=mine, measured_consumption=9.0,
+                                measured_weight=1.0)
+
+    assert result.basis == 7.0 and result.gap_applied is False
+    assert result.saving < 0            # yours looks worse, as it should
+
+
+def test_the_lift_does_nothing_at_the_entered_figure(db):
+    """With the slider at zero there is no gap to carry across."""
+    mine = petrol(db, 7.0)
+    theirs = petrol(db, 6.0)
+    intervals = [FakeInterval("2026-06-01", "2026-06-20", 500.0, cost=90.0, litres_added=45.0)]
+
+    result = comparison.compare(db, ensure_user(db).id, intervals, theirs,
+                                driven_vehicle=mine, measured_consumption=9.0,
+                                apply_gap_to_alternative=True)
+
+    assert result.basis == 6.0
+    assert result.gap_applied is False and result.real_world_gap is None
+
+
+def test_a_car_can_be_compared_with_itself(db):
+    """Not a mistake to catch. At the entered figure it reads zero, and with
+    the slider moved it weighs what the car achieves against what it claims."""
+    mine = petrol(db, 7.0)
+    intervals = [FakeInterval("2026-06-01", "2026-06-20", 1000.0, cost=180.0, litres_added=90.0)]
+
+    flat = comparison.compare(db, ensure_user(db).id, intervals, mine, driven_vehicle=mine)
+    assert flat.saving == 0.0 and flat.co2_saving_kg == 0.0
+
+    real = comparison.compare(db, ensure_user(db).id, intervals, mine, driven_vehicle=mine,
+                              measured_consumption=9.0, measured_weight=1.0)
+    assert real.your_basis == 9.0 and real.basis == 7.0
+    # What the brochure understates by, in money and carbon.
+    assert real.saving < 0 and real.co2_saving_kg < 0
+
+
+def test_your_car_is_priced_even_with_no_receipt_and_a_different_fuel(db):
+    """Over a distance you pick there is no receipt, and falling back to the
+    *other* car's fuel priced yours at nothing — an EV against a petrol car
+    reported the EV as free."""
+    add_price(db, D(2026, 6, 1), 1.80)
+    user = ensure_user(db)
+    add_tariff(db, user.id, D(2026, 1, 1), [("Flat", 0, 0, 0.30)])
+
+    ev = car(db, make="Renault", model="R4", fuel_type=FuelType.electric,
+             consumption_kwh_per_100km=15.0)
+    petrol_car = petrol(db, 6.0)
+
+    result = comparison.compare(db, user.id,
+                                comparison.over_distance(1000, D(2026, 6, 15)),
+                                petrol_car, driven_vehicle=ev)
+
+    # 150 kWh at 0.30, against 60 L at 1.80.
+    assert result.actual_cost == pytest.approx(45.0)
+    assert result.alternative_cost == pytest.approx(108.0)
+    assert result.saving == pytest.approx(63.0)
+
+
+def test_the_same_holds_when_the_showroom_car_is_the_electric_one(db):
+    add_price(db, D(2026, 6, 1), 1.80)
+    user = ensure_user(db)
+    add_tariff(db, user.id, D(2026, 1, 1), [("Flat", 0, 0, 0.30)])
+
+    mine = petrol(db, 6.0)
+    ev = car(db, fuel_type=FuelType.electric, consumption_kwh_per_100km=15.0)
+
+    result = comparison.compare(db, user.id,
+                                comparison.over_distance(1000, D(2026, 6, 15)),
+                                ev, driven_vehicle=mine)
+    assert result.actual_cost == pytest.approx(108.0)
+    assert result.alternative_cost == pytest.approx(45.0)

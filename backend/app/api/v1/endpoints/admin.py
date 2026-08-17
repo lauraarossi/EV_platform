@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import datetime
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -33,7 +33,7 @@ from app.schemas.admin import (
     TaskRead,
 )
 from app.security import get_current_admin
-from app.services import admin_tasks
+from app.services import admin_tasks, vca_catalog
 
 router = APIRouter(
     prefix="/admin",
@@ -109,6 +109,13 @@ def overview(db: Session = Depends(get_db)):
 
 # --- refreshes ---------------------------------------------------------------
 
+def _already_running(db: Session, task_key: str) -> bool:
+    return db.scalars(
+        select(ImportRun).where(
+            ImportRun.task == task_key, ImportRun.status == ImportStatus.running
+        )
+    ).first() is not None
+
 @router.post("/tasks/{task_key}/run", response_model=ImportRunRead, status_code=202)
 def run_task(
     task_key: str,
@@ -125,18 +132,61 @@ def run_task(
     if task_key not in admin_tasks.TASKS:
         raise HTTPException(status_code=404, detail=f"No such task: {task_key}")
 
-    already = db.scalars(
-        select(ImportRun).where(
-            ImportRun.task == task_key, ImportRun.status == ImportStatus.running
-        )
-    ).first()
-    if already:
-        raise HTTPException(
-            status_code=409, detail="That refresh is already running"
-        )
+    if _already_running(db, task_key):
+        raise HTTPException(status_code=409, detail="That refresh is already running")
 
     run = admin_tasks.start(db, task_key, admin)
     background.add_task(admin_tasks.execute, run.id, task_key, params or {})
+    return ImportRunRead.model_validate(run)
+
+
+# 25 MB: the real file is a 113 KB zip, so anything near this is a mistake
+# rather than a bigger dataset, and the body is read into memory whole.
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+
+
+@router.post("/tasks/vca/upload", response_model=ImportRunRead, status_code=202)
+async def upload_vca(
+    request: Request,
+    background: BackgroundTasks,
+    filename: str | None = Query(default=None, description="Shown in the run history"),
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """Import a VCA zip sent as the request body.
+
+    The VCA download sits behind a form that cannot be scripted, so refreshing
+    it otherwise means committing a new zip and redeploying. Sent as a raw body
+    rather than a multipart form: one file needs no dependency to parse it.
+
+    The rows land in the database and stay there. The zip itself does not — the
+    filesystem is replaced on every deploy — so commit it to data/vca as well
+    if the next deploy should start from it.
+    """
+    data = await request.body()
+    if not data:
+        raise HTTPException(status_code=400, detail="No file received")
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="That file is far larger than a VCA zip")
+
+    # Checked here rather than in the background, so a wrong file is refused
+    # while the person who picked it is still looking at the screen.
+    try:
+        rows = vca_catalog.read_rows(data)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400, detail=f"That does not look like a VCA zip: {exc}"
+        ) from exc
+    if not rows:
+        raise HTTPException(status_code=400, detail="That zip's CSV has no rows")
+
+    if _already_running(db, "vca"):
+        raise HTTPException(status_code=409, detail="That refresh is already running")
+
+    run = admin_tasks.start(db, "vca", admin)
+    background.add_task(
+        admin_tasks.execute, run.id, "vca", {"data": data, "filename": filename}
+    )
     return ImportRunRead.model_validate(run)
 
 

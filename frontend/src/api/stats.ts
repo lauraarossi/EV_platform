@@ -17,6 +17,8 @@ export const getComparison = (
   measuredWeight = 0,
   /** Compare over this distance instead of the first car's logged history. */
   distanceKm?: number,
+  /** Lift the second car's figure by the same gap, keeping them comparable. */
+  applyGap = false,
 ) =>
   api
     .get<Comparison>(`/stats/vehicles/${vehicleId}/compare`, {
@@ -26,6 +28,7 @@ export const getComparison = (
         ...(fallback?.perKwh != null ? { fallback_price_per_kwh: fallback.perKwh } : {}),
         ...(measuredWeight > 0 ? { measured_weight: measuredWeight } : {}),
         ...(distanceKm != null ? { distance_km: distanceKm } : {}),
+        ...(applyGap ? { apply_gap_to_alternative: true } : {}),
       },
     })
     .then(r => r.data)

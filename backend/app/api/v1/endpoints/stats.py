@@ -59,6 +59,14 @@ def compare_vehicles(
         default=None,
         description="Used only when no electricity tariff covers that date",
     ),
+    apply_gap_to_alternative: bool = Query(
+        default=False,
+        description=(
+            "Lift the second car's figure by the same proportion the first is "
+            "being lifted above its own brochure figure, so the two stay "
+            "comparable while both describe real driving."
+        ),
+    ),
     measured_weight: float = Query(
         default=0.0, ge=0, le=1,
         description=(
@@ -78,9 +86,9 @@ def compare_vehicles(
     distance and it is costed at today's.
     """
     vehicle, events = _load(db, user, vehicle_id)
+    # The same car on both sides is allowed, and useful: with the slider moved
+    # it weighs what the car actually achieves against what it is quoted at.
     alternative = owned_vehicle(db, user, comparison_vehicle_id)
-    if alternative.id == vehicle.id:
-        raise HTTPException(status_code=400, detail="Pick two different cars")
 
     logged, _ = metrics.build_intervals(events, vehicle)
 
@@ -114,6 +122,7 @@ def compare_vehicles(
             driven_vehicle=vehicle,
             measured_consumption=measured,
             measured_weight=measured_weight,
+            apply_gap_to_alternative=apply_gap_to_alternative,
             fallback_price_per_litre=fallback_price_per_litre,
             fallback_price_per_kwh=fallback_price_per_kwh,
         )

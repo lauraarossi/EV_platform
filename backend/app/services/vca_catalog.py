@@ -304,7 +304,12 @@ def to_catalog_values(row: dict) -> dict | None:
     }
 
 
-def ingest(db: Session, data: bytes | None = None, path: Path | None = None) -> VcaImportResult:
+def ingest(
+    db: Session,
+    data: bytes | None = None,
+    path: Path | None = None,
+    name: str | None = None,
+) -> VcaImportResult:
     source = path or (None if data else latest_file())
     if data is None:
         data = source.read_bytes()
@@ -352,7 +357,7 @@ def ingest(db: Session, data: bytes | None = None, path: Path | None = None) -> 
     db.commit()
 
     return VcaImportResult(
-        file=source.name if source else "uploaded",
+        file=source.name if source else (name or "uploaded"),
         fetched=len(rows),
         inserted=inserted,
         updated=updated,

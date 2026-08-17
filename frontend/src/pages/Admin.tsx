@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  getOverview, getRuns, getUsers, runTask, setUserRole,
+  getOverview, getRuns, getUsers, runTask, setUserRole, uploadVca,
   type AdminOverview, type AdminUser, type ImportRun, type UserRole,
 } from '../api/admin'
 import { useAuth } from '../hooks/useAuth'
@@ -97,6 +97,20 @@ export default function Admin() {
     }
   }
 
+  const upload = async (file: File) => {
+    setBusy('vca')
+    setNotice(null)
+    try {
+      await uploadVca(file)
+      setNotice(`Importing ${file.name}…`)
+      await load()
+    } catch (e: any) {
+      setNotice(e?.response?.data?.detail ?? 'Could not read that file.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const changeRole = async (target: AdminUser, role: UserRole) => {
     setNotice(null)
     try {
@@ -162,16 +176,39 @@ export default function Admin() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-semibold text-ink">{task.label}</h3>
-                  <p className="mt-1 text-xs leading-relaxed text-ink-3">{task.description}</p>
+                          <p className="mt-1 text-xs leading-relaxed text-ink-3">{task.description}</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => start(task.key, task.label, task.slow)}
-                  disabled={running || busy === task.key}
-                  className="btn-primary focus-ring shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50"
-                >
-                  {running ? 'Running…' : 'Run'}
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  {/* The VCA download cannot be scripted, so a new file has to
+                      come from whoever downloaded it. */}
+                  {task.key === 'vca' && (
+                    <label
+                      className={`focus-ring cursor-pointer rounded-lg border border-edge px-3 py-1.5 text-xs font-medium text-ink-2 hover:text-ink ${
+                        running || busy === task.key ? 'pointer-events-none opacity-50' : ''
+                      }`}
+                    >
+                      Upload zip
+                      <input
+                        type="file"
+                        accept=".zip,application/zip"
+                        className="hidden"
+                        onChange={e => {
+                          const file = e.target.files?.[0]
+                          e.target.value = ''      // so the same file can be picked twice
+                          if (file) upload(file)
+                        }}
+                      />
+                    </label>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => start(task.key, task.label, task.slow)}
+                    disabled={running || busy === task.key}
+                    className="btn-primary focus-ring rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                  >
+                    {running ? 'Running…' : 'Run'}
+                  </button>
+                </div>
               </div>
 
               <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-edge pt-3 text-xs text-ink-3">

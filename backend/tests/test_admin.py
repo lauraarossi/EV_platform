@@ -247,3 +247,75 @@ class _NoCloseSession:
 
     def __exit__(self, *exc):
         return False
+
+
+# --- uploading a VCA file -----------------------------------------------------
+#
+# The VCA download sits behind a form that cannot be scripted, so the console
+# is the only way to refresh it without a redeploy.
+
+def vca_zip(rows=1):
+    import csv, io, zipfile
+
+    columns = ["Manufacturer", "Model", "Description", "Transmission",
+               "Manual or Automatic", "Engine Capacity", "Fuel Type", "Powertrain",
+               "Engine Power (PS)", "Engine Power (Kw)", "wh/km",
+               "Maximum range (Km)", "WLTP Metric Combined", "WLTP CO2"]
+    buf = io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=columns)
+    w.writeheader()
+    for i in range(rows):
+        w.writerow({c: "" for c in columns} | {
+            "Manufacturer": "RENAULT", "Model": f"Model {i}", "Description": "iconic 150 hp",
+            "Fuel Type": "Electricity", "Engine Power (PS)": "150",
+            "Maximum range (Km)": "396", "wh/km": "156", "Transmission": "N/A",
+            "Manual or Automatic": "Electric - Not Applicable",
+        })
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w") as z:
+        z.writestr("Euro_6_latest.csv", buf.getvalue().encode("cp1252"))
+    return out.getvalue()
+
+
+def test_an_uploaded_zip_starts_an_import(client, signed_in, db, monkeypatch):
+    make_admin(db)
+    monkeypatch.setattr(admin_tasks, "execute", lambda *a, **k: None)
+
+    r = client.post("/api/v1/admin/tasks/vca/upload?filename=Euro_6_latest.zip",
+                    content=vca_zip(3))
+    assert r.status_code == 202
+    assert r.json()["task"] == "vca"
+
+
+def test_the_upload_needs_the_admin_role(client, signed_in):
+    assert client.post("/api/v1/admin/tasks/vca/upload", content=vca_zip()).status_code == 403
+
+
+@pytest.mark.parametrize(
+    "body,expected",
+    [
+        (b"", 400),                      # nothing sent
+        (b"not a zip at all", 400),      # wrong file entirely
+    ],
+)
+def test_a_bad_upload_is_refused_immediately(client, signed_in, db, body, expected):
+    """Checked while the person who picked the file is still looking at it,
+    rather than failing later in the background."""
+    make_admin(db)
+    r = client.post("/api/v1/admin/tasks/vca/upload", content=body)
+    assert r.status_code == expected
+
+
+def test_an_upload_actually_imports_the_rows(db):
+    """The task runs the uploaded bytes rather than the committed file."""
+    from app.models import CatalogVehicle
+
+    run = admin_tasks.start(db, "vca", None)
+    admin_tasks.execute(run.id, "vca", {"data": vca_zip(4), "filename": "up.zip"},
+                        session_factory=lambda: _NoCloseSession(db))
+
+    db.refresh(run)
+    assert run.status == ImportStatus.ok
+    assert run.result["inserted"] == 4
+    assert run.result["file"] == "up.zip"
+    assert db.query(CatalogVehicle).count() == 4

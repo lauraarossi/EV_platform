@@ -65,6 +65,20 @@ export const runTask = (key: string, params?: Record<string, unknown>) =>
 export const getRuns = (limit = 25) =>
   api.get<ImportRun[]>('/admin/runs', { params: { limit } }).then(r => r.data)
 
+/**
+ * Import a VCA zip picked in the browser.
+ *
+ * Sent as the raw body rather than a multipart form — one file needs no
+ * dependency on the server to parse it.
+ */
+export const uploadVca = (file: File) =>
+  api
+    .post<ImportRun>('/admin/tasks/vca/upload', file, {
+      params: { filename: file.name },
+      headers: { 'Content-Type': 'application/zip' },
+    })
+    .then(r => r.data)
+
 export const getUsers = () => api.get<AdminUser[]>('/admin/users').then(r => r.data)
 
 export const setUserRole = (id: number, role: UserRole) =>

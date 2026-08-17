@@ -205,6 +205,11 @@ export interface Comparison {
   your_basis_quoted: number
   your_basis_measured: number | null
   measured_weight: number
+  /** How far above its brochure figure the first car is being taken, and
+   *  whether the second was lifted to match so the two stay comparable. */
+  real_world_gap: number | null
+  gap_applied: boolean
+  basis_quoted: number
   your_quantity: number
   actual_co2_kg: number | null
   alternative_co2_kg: number

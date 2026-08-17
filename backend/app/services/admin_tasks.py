@@ -87,10 +87,15 @@ TASKS: dict[str, Task] = {
         key="vca",
         label="VCA new-car data",
         description=(
-            "Trim names and transmissions, from the zip in data/vca. "
-            "Refreshed by replacing that file, as it cannot be fetched."
+            "Trim names and transmissions. Run uses the zip shipped with the "
+            "app; upload a newer one to import it straight away — the rows "
+            "persist, though the file itself is gone at the next deploy."
         ),
-        run=lambda db, params: vca_catalog.ingest(db),
+        # `data` is set when a zip is uploaded through the console; otherwise
+        # the newest file committed under data/vca is used.
+        run=lambda db, params: vca_catalog.ingest(
+            db, data=params.get("data"), name=params.get("filename")
+        ),
     ),
     "merge": Task(
         key="merge",
