@@ -32,7 +32,8 @@ export interface Vehicle {
   zero_to_100_seconds?: number | null
   top_speed_kmh?: number | null
   kerb_weight_kg?: number | null
-  is_comparison_vehicle: boolean
+  /** Owned cars live in the Garage; the rest are Showroom cars you're weighing up. */
+  is_owned: boolean
 }
 
 export type VehicleInput = Omit<Vehicle, 'id'>
@@ -197,6 +198,10 @@ export interface Comparison {
   saving: number
   actual_cost_per_100km: number | null
   alternative_cost_per_100km: number | null
+  /** Real money from the receipts, kept apart from the like-for-like sum. */
+  actual_spend: number
+  your_basis: number
+  your_quantity: number
   actual_co2_kg: number | null
   alternative_co2_kg: number
   /** Positive means the alternative would have emitted more. */

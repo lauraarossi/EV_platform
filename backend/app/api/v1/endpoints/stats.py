@@ -63,12 +63,14 @@ def compare_vehicles(
     alternative = owned_vehicle(db, user, comparison_vehicle_id)
 
     intervals, _ = metrics.build_intervals(events, vehicle)
+
     try:
         result = comparison.compare(
             db,
             user.id,
             intervals,
             alternative,
+            driven_vehicle=vehicle,
             fallback_price_per_litre=fallback_price_per_litre,
             fallback_price_per_kwh=fallback_price_per_kwh,
         )

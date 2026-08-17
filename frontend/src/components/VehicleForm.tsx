@@ -38,7 +38,7 @@ export default function VehicleForm({
     image_url: existing?.image_url ?? '',
     fuel_type: existing?.fuel_type ?? '',
     transmission: existing?.transmission ?? '',
-    is_comparison_vehicle: existing?.is_comparison_vehicle ?? false,
+    is_owned: existing?.is_owned ?? true,
     battery_capacity_kwh: existing?.battery_capacity_kwh != null ? String(existing.battery_capacity_kwh) : '',
     onboard_charger_kw: existing?.onboard_charger_kw != null ? String(existing.onboard_charger_kw) : '',
     wltp_range_km: existing?.wltp_range_km != null ? String(existing.wltp_range_km) : '',
@@ -119,7 +119,7 @@ export default function VehicleForm({
         zero_to_100_seconds: num(f.zero_to_100_seconds),
         top_speed_kmh: num(f.top_speed_kmh),
         kerb_weight_kg: num(f.kerb_weight_kg),
-        is_comparison_vehicle: f.is_comparison_vehicle,
+        is_owned: f.is_owned,
       })
     } catch (err) {
       setError(describeError(err))
@@ -190,14 +190,15 @@ export default function VehicleForm({
           <label className="flex cursor-pointer items-center gap-2.5 pb-2">
             <input
               type="checkbox"
-              checked={f.is_comparison_vehicle}
-              onChange={e => setF(p => ({ ...p, is_comparison_vehicle: e.target.checked }))}
+              checked={!f.is_owned}
+              onChange={e => setF(p => ({ ...p, is_owned: !e.target.checked }))}
               className="focus-ring h-4 w-4 rounded border-edge"
             />
             <span className="text-sm text-ink">
-              Comparison car
+              Showroom car
               <span className="block text-[11px] text-ink-3">
-                A car you're measuring against, not one you drive
+                One you're weighing up rather than driving. Same details either way — it
+                just can't be logged against.
               </span>
             </span>
           </label>

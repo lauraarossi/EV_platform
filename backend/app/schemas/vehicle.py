@@ -26,7 +26,7 @@ class VehicleBase(BaseModel):
     top_speed_kmh: int | None = Field(default=None, gt=0)
     kerb_weight_kg: int | None = Field(default=None, gt=0)
 
-    is_comparison_vehicle: bool = False
+    is_owned: bool = True
 
 
 class VehicleCreate(VehicleBase):

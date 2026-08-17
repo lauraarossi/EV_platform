@@ -97,7 +97,7 @@ function VehicleCard({
                 border: `1px solid ${isEv ? 'color-mix(in oklab, var(--accent-2) 30%, transparent)' : 'var(--border)'}`,
               }}
             >
-              {v.is_comparison_vehicle ? 'comparison' : v.fuel_type}
+              {v.is_owned ? v.fuel_type : 'showroom'}
             </span>
           </div>
         </div>
@@ -131,7 +131,7 @@ function VehicleCard({
           {v.kerb_weight_kg != null && <Spec label="Weight" value={units.weight(v.kerb_weight_kg)} />}
         </dl>
 
-        {!v.is_comparison_vehicle && summary && <StatusStrip s={summary} fuel={v.fuel_type} />}
+        {v.is_owned && summary && <StatusStrip s={summary} fuel={v.fuel_type} />}
 
         <div className="mt-4 flex justify-end gap-2">
           <button onClick={onEdit} className="focus-ring rounded-lg border border-edge px-3 py-1.5 text-xs font-medium text-ink-2 hover:text-ink">
@@ -157,7 +157,7 @@ export default function Garage() {
   const { data, error, loading, reload } = useAsync(async () => {
     const vehicles = await getVehicles()
     // Status strip is only meaningful for cars you actually drive.
-    const owned = vehicles.filter(v => !v.is_comparison_vehicle)
+    const owned = vehicles.filter(v => v.is_owned)
     const summaries = await Promise.all(owned.map(v => getSummary(v.id).catch(() => null)))
     const byId = new Map<number, Summary>()
     owned.forEach((v, i) => summaries[i] && byId.set(v.id, summaries[i]!))
@@ -169,8 +169,8 @@ export default function Garage() {
   if (!data) return null
 
   const { vehicles, summaries } = data
-  const owned = vehicles.filter(v => !v.is_comparison_vehicle)
-  const comparisons = vehicles.filter(v => v.is_comparison_vehicle)
+  const owned = vehicles.filter(v => v.is_owned)
+  const showroom = vehicles.filter(v => !v.is_owned)
 
   const save = async (payload: VehicleInput) => {
     if (editing) await updateVehicle(editing.id, payload)
@@ -217,7 +217,7 @@ export default function Garage() {
           {owned.length > 0 && (
             <section>
               <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-ink-3">
-                Yours ({owned.length})
+                Garage ({owned.length})
               </h2>
               <div className="grid gap-3 lg:grid-cols-2">
                 {owned.map(v => (
@@ -230,13 +230,17 @@ export default function Garage() {
             </section>
           )}
 
-          {comparisons.length > 0 && (
+          {showroom.length > 0 && (
             <section>
               <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-ink-3">
-                Comparison cars ({comparisons.length})
+                Showroom ({showroom.length})
               </h2>
+              <p className="-mt-2 mb-3 text-xs text-ink-3">
+                Cars you're weighing up rather than driving. Same details as anything in the
+                Garage — they just have nothing logged against them.
+              </p>
               <div className="grid gap-3 lg:grid-cols-2">
-                {comparisons.map(v => (
+                {showroom.map(v => (
                   <VehicleCard key={v.id} v={v} onEdit={() => setEditing(v)} onDelete={() => remove(v)} />
                 ))}
               </div>

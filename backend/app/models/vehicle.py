@@ -62,10 +62,14 @@ class Vehicle(Base, TimestampMixin):
     top_speed_kmh: Mapped[int | None] = mapped_column(Integer)
     kerb_weight_kg: Mapped[int | None] = mapped_column(Integer)
 
-    # A car you do not own, kept only to price your driving against. Any fuel
-    # type can sit on either side: an EV owner comparing against petrol, or a
-    # diesel owner wondering what an EV would have cost.
-    is_comparison_vehicle: Mapped[bool] = mapped_column(default=False)
+    # Whether this is a car you actually have. Owned cars sit in the Garage and
+    # can be logged against; the rest are in the Showroom, cars being weighed
+    # up rather than driven.
+    #
+    # It changes nothing else: both hold the same specs, and either can be on
+    # either side of a comparison. The split is about what you own, not about
+    # what the car is for.
+    is_owned: Mapped[bool] = mapped_column(default=True)
 
     nickname: Mapped[str | None] = mapped_column(String(100))
     # Remote URL rather than an upload: PaaS filesystems are ephemeral, so

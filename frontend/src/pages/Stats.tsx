@@ -29,7 +29,7 @@ export default function Stats() {
 
   const { data, error, loading, reload } = useAsync(async () => {
     const vehicles = await getVehicles()
-    const owned = vehicles.filter(v => !v.is_comparison_vehicle)
+    const owned = vehicles.filter(v => v.is_owned)
     const selected = vehicleId ?? owned[0]?.id ?? null
     if (!selected) return { owned, selected, summary: null, intervals: [], events: [] }
     const [summary, iv, sessions] = await Promise.all([

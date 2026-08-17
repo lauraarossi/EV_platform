@@ -29,17 +29,15 @@ export default function Compare() {
 
   const { data, error, loading, reload } = useAsync(async () => {
     const vehicles = await getVehicles()
-    const owned = vehicles.filter(v => !v.is_comparison_vehicle)
-    // A comparison car needs the one figure the estimate rests on: a
-    // consumption rate, or for an EV a battery and range to derive one from.
-    const alternatives = vehicles.filter(
-      v =>
-        v.is_comparison_vehicle &&
-        (v.fuel_consumption_l_per_100km != null ||
-          v.consumption_kwh_per_100km != null ||
-          (v.battery_capacity_kwh != null && v.wltp_range_km != null)),
-    )
+    const owned = vehicles.filter(v => v.is_owned)
     const selectedMine = mineId ?? owned[0]?.id ?? null
+    // Either side can be any car, Garage or Showroom — the only requirement is
+    // the figure the whole estimate rests on, and that it isn't the same car.
+    const comparable = (v: (typeof vehicles)[number]) =>
+      v.fuel_consumption_l_per_100km != null ||
+      v.consumption_kwh_per_100km != null ||
+      (v.battery_capacity_kwh != null && v.wltp_range_km != null)
+    const alternatives = vehicles.filter(v => v.id !== selectedMine && comparable(v))
     const selectedOther = otherId ?? alternatives[0]?.id ?? null
 
     const comparison =
@@ -72,7 +70,7 @@ export default function Compare() {
         <PageHeader title="Compare" subtitle={SUBTITLE} />
         <EmptyState
           title="No comparison car set up"
-          body="In the Garage, add a car with a consumption figure — L/100km for petrol or diesel, kWh/100km for an electric one — and tick “Comparison car”."
+          body="Add another car — in the Garage or the Showroom — with a consumption figure: L/100km for petrol or diesel, kWh/100km for an electric one."
         />
       </>
     )
@@ -94,6 +92,12 @@ export default function Compare() {
 
   const ahead = comparison.saving >= 0
   const cleaner = comparison.co2_saving_kg >= 0
+  const yourName = mine.nickname || `${mine.make} ${mine.model}`
+  const theirName = comparison.comparison_vehicle
+  const yourUnitLabel = mine.fuel_type === 'electric' ? 'kWh' : 'L'
+  const sameFuel = mine.fuel_type === comparison.comparison_fuel
+  const electricityInvolved =
+    takesElectricity(mine.fuel_type) || takesElectricity(comparison.comparison_fuel)
   const priced = comparison.intervals.filter(i => i.cost != null)
   const otherIsElectric = takesElectricity(comparison.comparison_fuel)
   const otherFuel = FUEL_LABEL[comparison.comparison_fuel]
@@ -103,9 +107,7 @@ export default function Compare() {
     <>
       <PageHeader
         title="Compare"
-        subtitle={`${units.distance(comparison.distance_km)} of real driving, priced at the ${
-          otherIsElectric ? 'electricity rates' : 'pump rates'
-        } that applied at the time.`}
+        subtitle={`${units.distance(comparison.distance_km)} of your real driving, costed in both cars at the rates that applied at the time.`}
       />
 
       <GlassCard className="mb-4 p-5">
@@ -123,16 +125,19 @@ export default function Compare() {
             <Select value={selectedOther ?? ''} onChange={e => setOtherId(Number(e.target.value))}>
               {alternatives.map(v => (
                 <option key={v.id} value={v.id}>
-                  {v.make} {v.model} — {FUEL_LABEL[v.fuel_type]}
+                  {v.nickname || `${v.make} ${v.model}`} — {FUEL_LABEL[v.fuel_type]}
+                  {v.is_owned ? ' · Garage' : ' · Showroom'}
                 </option>
               ))}
             </Select>
           </Field>
         </div>
         <p className="mt-3 text-xs text-ink-3">
-          {otherIsElectric
-            ? 'Electricity is priced from your saved tariff for each date, taking its cheapest band — a car you don’t own has no charging history to say when it would have been plugged in.'
-            : 'Pump prices come from the EU Weekly Oil Bulletin (Irish national average, updated weekly). Add your own prices to override them for a date or city.'}
+          {sameFuel
+            ? `Both cars run on the same thing, so both are priced at what you actually paid per ${comparison.unit_label} — your receipts beat any national average.`
+            : otherIsElectric
+              ? 'Yours is priced at what you actually paid. The electric one uses your saved tariff for each date, at its cheapest band — a car you don’t own has no charging history to say when it would have been plugged in.'
+              : 'Yours is priced at what you actually paid. The other uses the EU Weekly Oil Bulletin (Irish national average, weekly), which your own entered prices override.'}
         </p>
       </GlassCard>
 
@@ -157,14 +162,14 @@ export default function Compare() {
 
       <section aria-label="Cost comparison" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
-          label="You paid"
+          label={`${yourName} would cost`}
           value={`€${fmt(comparison.actual_cost)}`}
-          hint={FUEL_LABEL[mine.fuel_type]}
+          hint={`${fmt(comparison.your_quantity, 1)} ${yourUnitLabel} at ${comparison.your_basis} ${comparison.basis_label}`}
         />
         <StatTile
-          label={`${otherFuel} would cost`}
+          label={`${theirName} would cost`}
           value={`€${fmt(comparison.alternative_cost)}`}
-          hint={`${fmt(comparison.quantity, 1)} ${comparison.unit_label}`}
+          hint={`${fmt(comparison.quantity, 1)} ${comparison.unit_label} at ${comparison.basis} ${comparison.basis_label}`}
           accent="var(--series-2)"
         />
         <StatTile
@@ -179,9 +184,20 @@ export default function Compare() {
         />
       </section>
 
+      <p className="mt-2 text-xs text-ink-3">
+        Both cars are costed from the consumption figure you entered for each, over the same{' '}
+        {units.distance(comparison.distance_km)}
+        {sameFuel
+          ? ', at the price you actually paid per ' + comparison.unit_label + '.'
+          : `, yours at what you paid and the ${theirName} at the going rate for ${otherFuel.toLowerCase()}.`}{' '}
+        You actually spent <span className="text-ink-2">€{fmt(comparison.actual_spend)}</span> over
+        that stretch — the difference from the figure above is your real driving against the
+        quoted one.
+      </p>
+
       <section aria-label="Emissions" className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
-          label="You emitted"
+          label={`${yourName} emits`}
           value={comparison.actual_co2_kg != null ? fmt(comparison.actual_co2_kg, 1) : '—'}
           unit="kg CO2"
           hint={
@@ -192,7 +208,7 @@ export default function Compare() {
           accent="var(--accent-3)"
         />
         <StatTile
-          label={`${otherFuel} would emit`}
+          label={`${theirName} emits`}
           value={fmt(comparison.alternative_co2_kg, 1)}
           unit="kg CO2"
           hint={
@@ -209,19 +225,21 @@ export default function Compare() {
           hint={cleaner ? 'by driving yours' : 'over the alternative'}
           accent={cleaner ? 'var(--good)' : 'var(--critical)'}
         />
-        <StatTile
-          label="Grid intensity"
-          value={fmt(comparison.grid_co2_g_per_kwh, 0)}
-          unit="g/kWh"
-          hint="What electricity is assumed to cost the atmosphere"
-          accent="var(--accent-2)"
-        />
+        {electricityInvolved && (
+          <StatTile
+            label="Grid intensity"
+            value={fmt(comparison.grid_co2_g_per_kwh, 0)}
+            unit="g/kWh"
+            hint="What electricity is assumed to cost the atmosphere"
+            accent="var(--accent-2)"
+          />
+        )}
       </section>
 
       <p className="mt-2 text-xs text-ink-3">
-        Emissions count burning the fuel and generating the electricity. They exclude refining,
-        manufacturing and the battery, so this compares the two on the same terms rather than
-        claiming to be a full lifecycle figure.
+        Emissions count burning the fuel{electricityInvolved && ' and generating the electricity'}.
+        They exclude refining, manufacturing and the battery, so this compares the two on the same
+        terms rather than claiming to be a full lifecycle figure.
       </p>
 
       <GlassCard className="mt-4 p-6">
@@ -236,9 +254,7 @@ export default function Compare() {
           </svg>
           <div>
             <p className="text-sm font-medium text-ink">
-              {ahead
-                ? `Cheaper than driving ${otherFuel.toLowerCase()}`
-                : `${otherFuel} would have been cheaper`}
+              {ahead ? `${yourName} is the cheaper car` : `${theirName} would be cheaper`}
             </p>
             <p className="readout mt-1 text-3xl font-semibold text-ink">
               €{fmt(Math.abs(comparison.saving))}
@@ -249,9 +265,10 @@ export default function Compare() {
                 ` · ${fmt(Math.abs(comparison.saving / comparison.alternative_cost) * 100, 0)}% ${ahead ? 'less' : 'more'}`}
             </p>
             <p className="mt-3 text-xs text-ink-3">
-              Against a {comparison.comparison_vehicle} at {comparison.basis}{' '}
-              {comparison.basis_label}. The first {eventNoun(mine.fuel_type)} is excluded — it paid
-              for driving from before you started logging.
+              {yourName} at {comparison.your_basis} {comparison.basis_label} against{' '}
+              {comparison.comparison_vehicle} at {comparison.basis} {comparison.basis_label}. The
+              first {eventNoun(mine.fuel_type)} is excluded — it paid for driving from before you
+              started logging.
             </p>
           </div>
         </div>
@@ -275,7 +292,7 @@ export default function Compare() {
                     comparison.unit_label,
                     `Price/${comparison.unit_label}`,
                     'Priced as of',
-                    `${otherFuel} cost`,
+                    `${theirName} cost`,
                   ].map(h => (
                     <th key={h} className="px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-ink-3">{h}</th>
                   ))}

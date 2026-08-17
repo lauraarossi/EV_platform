@@ -39,7 +39,7 @@ export default function Charges() {
 
   const { data, error, loading, reload } = useAsync(async () => {
     const vehicles = await getVehicles()
-    const owned = vehicles.filter(v => !v.is_comparison_vehicle)
+    const owned = vehicles.filter(v => v.is_owned)
     const selected = vehicleId ?? owned[0]?.id ?? null
     const events = selected ? await getFuelEvents(selected) : []
     const intervalData = selected ? await getIntervals(selected) : { intervals: [], anomalies: [] }

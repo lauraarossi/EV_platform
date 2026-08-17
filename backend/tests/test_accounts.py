@@ -179,7 +179,7 @@ def make_vehicle(client, make="Renault"):
     r = client.post(
         "/api/v1/vehicles/",
         json={"make": make, "model": "R4 E-Tech", "year": 2026, "fuel_type": "electric",
-              "battery_capacity_kwh": 52, "is_comparison_vehicle": False},
+              "battery_capacity_kwh": 52, "is_owned": True},
     )
     assert r.status_code == 201, r.text
     return r.json()
@@ -215,7 +215,7 @@ def test_cannot_read_someone_elses_vehicle(client, signed_in, other_client):
 def test_cannot_edit_or_delete_someone_elses_vehicle(client, signed_in, other_client):
     theirs = make_vehicle(other_client, make="Nissan")
     payload = {"make": "Hijacked", "model": "X", "year": 2026, "fuel_type": "electric",
-               "is_comparison_vehicle": False}
+               "is_owned": True}
     assert client.put(f"/api/v1/vehicles/{theirs['id']}", json=payload).status_code == 404
     assert client.delete(f"/api/v1/vehicles/{theirs['id']}").status_code == 404
     # still intact for its owner
