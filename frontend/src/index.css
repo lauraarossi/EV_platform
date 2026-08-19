@@ -207,6 +207,60 @@ html.dark body {
       0 2px 8px -2px rgb(0 0 0 / 0.16);
   }
 
+  /* --- mobile chrome ------------------------------------------------------
+     On a phone the top bar carries only the badge and the theme toggle, so
+     once the page moves it shrinks to a pill on the right and lets the reading
+     area have the screen. Desktop is untouched: everything here is behind a
+     max-width query, and the bar keeps its frosting there.
+
+     Driven by a data attribute rather than a class list, so the component
+     holds the state and the stylesheet holds the presentation. */
+  .top-bar {
+    margin-inline: auto;
+    padding-inline: 1rem;
+    transition: background-color 240ms ease, padding 240ms ease;
+  }
+
+  .top-bar-brand {
+    display: flex;
+    overflow: hidden;
+    white-space: nowrap;
+    /* Collapsing the brand rather than the bar itself: a flex container
+       animates smoothly as its child shrinks, where width on the container
+       does not. */
+    transition: max-width 260ms ease, opacity 180ms ease;
+    max-width: 12rem;
+  }
+
+  @media (max-width: 767px) {
+    /* Unfrosted at rest — it sits over the background there, and the lighter
+       glass is the nicer thing to look at. */
+    .top-bar:not([data-scrolled="true"]) {
+      background: var(--surface);
+      backdrop-filter: blur(var(--blur)) saturate(var(--glass-saturate));
+      -webkit-backdrop-filter: blur(var(--blur)) saturate(var(--glass-saturate));
+    }
+
+    .top-bar[data-scrolled="true"] {
+      margin-left: auto;
+      margin-right: 0;
+      width: fit-content;
+      padding-inline: 0.5rem;
+    }
+
+    .top-bar[data-scrolled="true"] .top-bar-brand {
+      max-width: 0;
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .top-bar,
+    .top-bar-brand {
+      transition: none;
+    }
+  }
+
   /* Specular top edge — what sells the material as glass rather than a tint.
      Deliberately no `overflow: hidden`: that clipped anything a child wanted
      to pop out, such as the account dropdown in the header. The line is inset
