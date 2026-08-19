@@ -44,6 +44,10 @@ export interface Units {
   consumption: (lPer100km: number | null | undefined) => string
   weight: (kg: number | null | undefined) => string
   costPerDistance: (costPer100km: number | null | undefined) => string
+  /** The money on its own, plus its suffix — so a tile can set the suffix in
+   *  small type instead of overflowing with "EUR 43.92/100km" at heading size. */
+  costPerDistanceValue: (costPer100km: number | null | undefined) => string
+  costUnit: string
 
   /** Form helpers: what the user typed -> km for storage, and back. */
   toKm: (entered: number) => number
@@ -81,6 +85,15 @@ export function makeUnits(system: UnitSystem): Units {
     },
 
     weight: kg => (kg == null ? '—' : `${num(imperial ? kgToLb(kg) : kg, 0)} ${imperial ? 'lb' : 'kg'}`),
+
+    costUnit: imperial ? '/mi' : '/100km',
+
+    costPerDistanceValue: costPer100km => {
+      if (costPer100km == null) return '—'
+      return imperial
+        ? `€${num(costPer100km / kmToMiles(100), 3)}`
+        : `€${num(costPer100km, 2)}`
+    },
 
     costPerDistance: costPer100km => {
       if (costPer100km == null) return '—'

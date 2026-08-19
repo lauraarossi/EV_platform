@@ -62,3 +62,19 @@ describe('formatting', () => {
     expect(u.weight(null)).toBe('—')
   })
 })
+
+describe('cost per distance in a stat tile', () => {
+  it('separates the money from its suffix, so long values fit', () => {
+    const metric = makeUnits('metric')
+    expect(metric.costPerDistanceValue(43.92)).toBe('€43.92')
+    expect(metric.costUnit).toBe('/100km')
+
+    const imperial = makeUnits('imperial')
+    expect(imperial.costPerDistanceValue(4.17)).toBe('€0.067')
+    expect(imperial.costUnit).toBe('/mi')
+  })
+
+  it('still has nothing to show when there is no figure', () => {
+    expect(makeUnits('metric').costPerDistanceValue(null)).toBe('—')
+  })
+})

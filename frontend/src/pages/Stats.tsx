@@ -144,7 +144,8 @@ export default function Stats() {
         />
         <StatTile
           label="Running cost"
-          value={units.costPerDistance(summary.avg_cost_per_100km)}
+          unit={units.costUnit}
+          value={units.costPerDistanceValue(summary.avg_cost_per_100km)}
           accent="var(--accent-3)"
         />
         <StatTile

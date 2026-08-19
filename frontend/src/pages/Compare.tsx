@@ -297,12 +297,14 @@ export default function Compare() {
         />
         <StatTile
           label={units.system === 'imperial' ? 'First per mile' : 'First per 100km'}
-          value={units.costPerDistance(comparison.actual_cost_per_100km)}
+          unit={units.costUnit}
+          value={units.costPerDistanceValue(comparison.actual_cost_per_100km)}
           accent="var(--accent-3)"
         />
         <StatTile
           label={units.system === 'imperial' ? 'Second per mile' : 'Second per 100km'}
-          value={units.costPerDistance(comparison.alternative_cost_per_100km)}
+          unit={units.costUnit}
+          value={units.costPerDistanceValue(comparison.alternative_cost_per_100km)}
           accent="var(--series-2)"
         />
       </section>

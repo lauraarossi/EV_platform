@@ -29,9 +29,13 @@ export default function StatTile({
         <span className="text-xs font-medium uppercase tracking-wider text-ink-3">{label}</span>
       </div>
 
-      <div className="mt-3 flex items-baseline gap-1.5">
-        <span className="readout text-3xl font-semibold text-ink">{value}</span>
-        {unit && <span className="text-sm font-medium text-ink-3">{unit}</span>}
+      {/* min-w-0 lets the value shrink inside the grid cell instead of pushing
+          past it, and the size steps down on narrow screens. */}
+      <div className="mt-3 flex min-w-0 flex-wrap items-baseline gap-x-1.5">
+        <span className="readout min-w-0 truncate text-2xl font-semibold text-ink sm:text-3xl">
+          {value}
+        </span>
+        {unit && <span className="shrink-0 text-sm font-medium text-ink-3">{unit}</span>}
       </div>
 
       {hint && <p className="mt-1.5 text-xs text-ink-3">{hint}</p>}
