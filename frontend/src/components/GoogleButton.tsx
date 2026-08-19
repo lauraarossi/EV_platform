@@ -72,6 +72,10 @@ export default function GoogleButton({
         // two Google buttons stacked in the card.
         holder.current.replaceChildren()
         window.google.accounts.id.renderButton(holder.current, {
+          // Google draws this button itself, in its own iframe, so none of our
+          // styling reaches inside it — the theme is the only lever we have.
+          // "filled_black" is the closest thing to transparent on a dark page;
+          // "outline" is a white card, which is what looked pasted on.
           theme: theme === 'dark' ? 'filled_black' : 'outline',
           size: 'large',
           width: 320,
@@ -88,5 +92,12 @@ export default function GoogleButton({
     }
   }, [clientId, theme, onCredential, onError])
 
-  return <div ref={holder} className="flex justify-center" />
+  // The personalised form of the button ("Continue as …") draws a white card
+  // whatever theme is asked for. Clipping to the same pill the button uses at
+  // least keeps its corners from showing as a rectangle behind it.
+  return (
+    <div className="flex justify-center">
+      <div ref={holder} className="overflow-hidden rounded-full" />
+    </div>
+  )
 }

@@ -10,5 +10,8 @@ httpx
 pytest
 openpyxl
 bcrypt
-pyjwt
+# The [crypto] extra pulls in `cryptography`, which PyJWT needs to verify
+# RS256 — the algorithm Google signs its ID tokens with. Without it, sign-in
+# fails at the first verification with "RS256 requires 'cryptography'".
+pyjwt[crypto]
 email-validator

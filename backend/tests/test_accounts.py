@@ -396,3 +396,16 @@ def test_the_redirect_does_not_need_an_account(client):
     r = client.get("/api/v1/vehicles/", headers={"host": "www.eevie.ie"},
                    follow_redirects=False)
     assert r.status_code == 301
+
+
+def test_rs256_verification_is_actually_available():
+    """PyJWT installs happily without `cryptography` and only fails when it
+    first meets a real Google token — which is signed RS256.
+
+    That is what happened: the package was present locally as someone else's
+    dependency and absent from the image, so every test passed while the
+    deployed sign-in returned "RS256 requires 'cryptography' to be installed".
+    """
+    from jwt.api_jws import get_default_algorithms
+
+    assert "RS256" in get_default_algorithms()
