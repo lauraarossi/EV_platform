@@ -68,8 +68,10 @@ def test_transmission_codes_become_readable(db):
         ("A8", "Automatic", "8-speed Automatic"),
         ("A1", "Automatic", "1-speed Automatic"),
         ("AV", "Automatic", "CVT"),
-        # EVs have no gearbox to describe.
-        ("N/A", "Electric - Not Applicable", Transmission.single_speed.value),
+        # The source declines to say for electric cars, so this does too:
+        # most are single-speed, a Taycan has two, and a guess in a spec field
+        # is worse than a blank.
+        ("N/A", "Electric - Not Applicable", None),
     ],
 )
 def test_transmission_parsing(code, spelled, expected):

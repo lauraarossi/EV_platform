@@ -27,18 +27,14 @@ API = "https://api.frankfurter.dev/v1"
 SOURCE = "European Central Bank (via Frankfurter)"
 BASE = "EUR"
 
-# What the interface offers. Deliberately short: every one of these needs a
-# symbol and sensible formatting, and an unbounded list buys nothing.
+# What the interface offers. Three, deliberately: the euro for here, sterling
+# for the North and Britain, the dollar for everywhere that quotes in it.
+# Adding more is a line each, but a long list in a dropdown is a cost paid by
+# everyone to serve almost nobody.
 CURRENCIES: dict[str, str] = {
     "EUR": "€",
     "GBP": "£",
     "USD": "$",
-    "CHF": "CHF ",
-    "SEK": "kr ",
-    "NOK": "kr ",
-    "DKK": "kr ",
-    "PLN": "zł ",
-    "CZK": "Kč ",
 }
 
 QUOTES = [c for c in CURRENCIES if c != BASE]

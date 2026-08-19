@@ -35,6 +35,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.catalog import CatalogVehicle, CatalogSource
+from app.services import catalog_naming
 from app.models.vehicle import FuelType, Transmission
 
 SQL_ENDPOINT = "https://discodata.eea.europa.eu/sql"
@@ -218,7 +219,10 @@ def describe_variant(row: dict, litres: float | None = None) -> str:
     return f"{_clean(row['Cn'])} ({label})" if label else _clean(row["Cn"])
 
 
-def to_catalog_values(row: dict, country: str, year: int | None = None) -> dict | None:
+def to_catalog_values(
+    row: dict, country: str, year: int | None = None,
+    known_make_keys: set[str] | None = None,
+) -> dict | None:
     fuel = FUEL_MAP.get(_clean(row.get("Ft")).lower())
     if fuel is None:
         return None  # unknown fuel label — skip rather than guess
@@ -233,18 +237,25 @@ def to_catalog_values(row: dict, country: str, year: int | None = None) -> dict 
         litres = round(float(row["co2"]) * 100.0 / CO2_PER_LITRE[fuel], 2)
         derived = True
 
+    make, model = _title(row["Mk"]), _clean(row["Cn"])
+    # A manufacturer field carrying a model name, e.g. "Porsche Taycan".
+    if known_make_keys:
+        make, model = catalog_naming.split_embedded_model(make, model, known_make_keys)
+
     return {
-        "make": _title(row["Mk"]),
-        "model": _clean(row["Cn"]),
+        "make": make,
+        "model": model,
         "variant": describe_variant(row, litres),
         # This dataset has no trim names — Cn is the commercial name. Leaving
         # it null is honest; stuffing the engine label in here was not.
         "trim": None,
         "model_year": year,
         "fuel_type": fuel,
-        # EVs are single-speed; for combustion the dataset says nothing, so
-        # leave it blank rather than assert a gearbox it never recorded.
-        "transmission": Transmission.single_speed.value if is_electric else None,
+        # Blank either way. The dataset records no transmission at all, and
+        # filling one in for electric cars asserted something untrue: most are
+        # single-speed, but a Porsche Taycan has a two-speed rear gearbox, and
+        # "mostly right" is not a thing to write into a spec field.
+        "transmission": None,
         "engine_size_cc": int(row["cc"]) if row.get("cc") else None,
         "fuel_consumption_l_per_100km": litres,
         "horsepower": round(float(kw) * KW_TO_HP) if kw else None,
@@ -296,10 +307,19 @@ def ingest(
     aggregated: dict[str, dict] = {}
     fetched = 0
 
+    # Every manufacturer across every batch, so a make carrying a model name can
+    # be recognised as one.
+    known_make_keys = {
+        catalog_naming.make_key(_title(r["Mk"]))
+        for _, batch in batches
+        for r in batch
+        if _clean(r.get("Mk"))
+    }
+
     for year, batch in batches:
         fetched += len(batch)
         for row in batch:
-            values = to_catalog_values(row, country, year)
+            values = to_catalog_values(row, country, year, known_make_keys)
             if values is None:
                 continue
 

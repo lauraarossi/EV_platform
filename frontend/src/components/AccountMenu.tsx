@@ -95,10 +95,13 @@ export default function AccountMenu() {
               value={code}
               onChange={e => { void choose(e.target.value) }}
               aria-label="Currency"
-              className="focus-ring mt-1.5 w-full rounded-lg border border-edge bg-transparent px-2 py-1.5 text-xs text-ink"
+              // Opaque, not transparent: the popup list is drawn by the
+              // browser, and against a transparent control it came out white
+              // with white text in dark mode.
+              className="focus-ring mt-1.5 w-full rounded-lg border border-edge bg-surface-solid px-2 py-1.5 text-xs text-ink"
             >
               {choices.map(c => (
-                <option key={c.code} value={c.code}>
+                <option key={c.code} value={c.code} className="bg-surface-solid text-ink">
                   {c.symbol.trim()} {c.code}
                 </option>
               ))}

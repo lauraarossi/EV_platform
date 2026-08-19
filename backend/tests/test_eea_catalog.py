@@ -41,13 +41,15 @@ def test_electric_rows_convert_wh_per_km(db):
     row = db.query(CatalogVehicle).one()
     assert row.fuel_type == FuelType.electric
     assert row.consumption_real_world_kwh_100km == 15.6   # 156 Wh/km
-    assert row.transmission == Transmission.single_speed.value
     assert row.engine_size_cc is None
 
 
-def test_combustion_transmission_left_blank(db):
-    """The dataset never records a gearbox, so asserting one would be invention."""
-    eea_catalog.ingest(db, rows=[eea_row()])
+@pytest.mark.parametrize("fuel", ["petrol", "electric"])
+def test_transmission_is_left_blank(db, fuel):
+    """The dataset never records a gearbox, so asserting one would be invention
+    — including for electric cars, where "single-speed" is right for most and
+    wrong for a Porsche Taycan, which has two."""
+    eea_catalog.ingest(db, rows=[eea_row(ft=fuel)])
     assert db.query(CatalogVehicle).one().transmission is None
 
 

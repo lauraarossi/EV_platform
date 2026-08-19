@@ -36,6 +36,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.services import catalog_naming
 from app.models.catalog import CatalogVehicle, CatalogSource
 from app.models.vehicle import FuelType, Transmission
 
@@ -142,10 +143,11 @@ def parse_transmission(code: str | None, manual_or_auto: str | None) -> str | No
     code = _clean(code).upper()
     spelled = _clean(manual_or_auto).lower()
 
-    if spelled.startswith("electric"):
-        return Transmission.single_speed.value
-    if not code or code in {"N/A", "NA", "-"}:
-        return Transmission.single_speed.value if spelled.startswith("electric") else None
+    # "Electric - Not Applicable" is the source declining to say, so this
+    # declines too. Assuming single-speed is right for most EVs and wrong for a
+    # Taycan, which has two — and a spec field should hold what is known.
+    if spelled.startswith("electric") or not code or code in {"N/A", "NA", "-"}:
+        return None
 
     m = re.match(r"^([A-Z]+)(\d+)?$", code)
     if not m:
@@ -266,7 +268,7 @@ def make_row_id(row: dict) -> str:
     return slug[:160]
 
 
-def to_catalog_values(row: dict) -> dict | None:
+def to_catalog_values(row: dict, known_make_keys: set[str] | None = None) -> dict | None:
     fuel = FUEL_MAP.get(_clean(row.get("Fuel Type")).lower())
     if fuel is None:
         return None
@@ -275,6 +277,10 @@ def to_catalog_values(row: dict) -> dict | None:
     model = _clean(row.get("Model"))
     if not make or not model:
         return None
+
+    # "Porsche Taycan" as a manufacturer, with the model in the wrong field.
+    if known_make_keys:
+        make, model = catalog_naming.split_embedded_model(make, model, known_make_keys)
 
     trim = clean_trim(row.get("Description", ""), model)
     ps = _num(row.get("Engine Power (PS)"))
@@ -360,8 +366,16 @@ def ingest(
     inserted = updated = 0
     seen: dict[str, dict] = {}
 
+    # Every manufacturer this file mentions, so a make carrying a model name can
+    # be recognised as one — which needs the whole file, not one row.
+    known_make_keys = {
+        catalog_naming.make_key(_title(r.get("Manufacturer", "")))
+        for r in rows
+        if _clean(r.get("Manufacturer"))
+    }
+
     for row in rows:
-        values = to_catalog_values(row)
+        values = to_catalog_values(row, known_make_keys)
         if values is None:
             continue
         seen.setdefault(make_row_id(row), values)

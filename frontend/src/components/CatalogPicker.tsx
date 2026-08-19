@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getMakes, getModels, getVariants } from '../api/catalog'
-import type { CatalogMake, CatalogModel, CatalogVehicle, FuelType } from '../types'
+import { FUEL_LABEL } from '../fuel'
+import type { CatalogMake, CatalogModel, CatalogVehicle } from '../types'
 import { Field, Select } from './form'
 
 /**
@@ -12,8 +13,13 @@ import { Field, Select } from './form'
  * distinguishing spec is added only where a name is actually shared.
  */
 function labelFor(v: CatalogVehicle, all: CatalogVehicle[]): string {
+  // A model holds every powertrain it was sold with — a Captur is petrol and
+  // hybrid — so the fuel has to be readable on the entry itself.
+  const mixed = new Set(all.map(o => o.fuel_type)).size > 1
+  const fuel = mixed ? ` · ${FUEL_LABEL[v.fuel_type]}` : ''
+
   const shared = all.filter(o => o.variant === v.variant).length > 1
-  if (!shared) return v.variant
+  if (!shared) return v.variant + fuel
 
   const marks = [
     v.battery_capacity_kwh ? `${v.battery_capacity_kwh} kWh` : null,
@@ -21,7 +27,7 @@ function labelFor(v: CatalogVehicle, all: CatalogVehicle[]): string {
     v.horsepower ? `${v.horsepower} hp` : null,
   ].filter(Boolean)
 
-  return marks.length ? `${v.variant} · ${marks.join(' · ')}` : v.variant
+  return (marks.length ? `${v.variant} · ${marks.join(' · ')}` : v.variant) + fuel
 }
 
 /**
@@ -41,10 +47,6 @@ export default function CatalogPicker({
   onPick: (entry: CatalogVehicle) => void
   onClear: () => void
 }) {
-  // Its own filter rather than the form's fuel type: that defaulted to
-  // Electric, so petrol and diesel cars looked missing until you knew to
-  // change it first. Empty means every fuel.
-  const [fuelType, setFuelType] = useState<FuelType | ''>('')
   const [makes, setMakes] = useState<CatalogMake[]>([])
   const [models, setModels] = useState<CatalogModel[]>([])
   const [variants, setVariants] = useState<CatalogVehicle[]>([])
@@ -59,11 +61,11 @@ export default function CatalogPicker({
   useEffect(() => {
     setLoading(true)
     setMakeKey('')
-    getMakes(fuelType || undefined)
+    getMakes()
       .then(setMakes)
       .catch(() => setError('Catalogue unavailable'))
       .finally(() => setLoading(false))
-  }, [fuelType])
+  }, [])
 
   useEffect(() => {
     setModels([])
@@ -71,10 +73,10 @@ export default function CatalogPicker({
     setModelKey('')
     setVariantId('')
     if (!makeKey) return
-    getModels(makeKey, fuelType || undefined)
+    getModels(makeKey)
       .then(setModels)
       .catch(() => setError('Could not load models'))
-  }, [makeKey, fuelType])
+  }, [makeKey])
 
   useEffect(() => {
     setVariants([])
@@ -130,20 +132,7 @@ export default function CatalogPicker({
         )}
       </div>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Field label="Fuel">
-          <Select
-            value={fuelType}
-            onChange={e => setFuelType(e.target.value as FuelType | '')}
-          >
-            <option value="">All</option>
-            <option value="electric">Electric</option>
-            <option value="petrol">Petrol</option>
-            <option value="diesel">Diesel</option>
-            <option value="hybrid">Hybrid</option>
-          </Select>
-        </Field>
-
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
         <Field label="Make">
           <Select value={makeKey} onChange={e => setMakeKey(e.target.value)} disabled={loading}>
             <option value="">{loading ? 'Loading…' : 'Select…'}</option>

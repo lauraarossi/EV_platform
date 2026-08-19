@@ -175,3 +175,43 @@ def test_make_display_drops_the_paperwork(recorded, expected):
 
 def test_choosing_from_nothing_is_not_an_error():
     assert naming.choose_display([]) == ""
+
+
+# --- a make field carrying a model name ---------------------------------------
+
+def test_a_model_in_the_make_field_is_moved_back():
+    """Sources file the odd car under "Porsche Taycan", which then stands in
+    the Make dropdown as though it were a manufacturer."""
+    make, model = naming.split_embedded_model(
+        "Porsche Taycan", "4 Cross Turismo", {"porsche", "audi"}
+    )
+    assert make == "Porsche"
+    assert model == "Taycan 4 Cross Turismo"
+
+
+def test_the_manufacturer_must_be_one_we_have_seen():
+    """Otherwise any two-word make would be chopped on a guess."""
+    make, model = naming.split_embedded_model("Land Rover", "Defender", {"land rover"})
+    assert (make, model) == ("Land Rover", "Defender")
+
+
+def test_a_shared_prefix_alone_is_not_enough():
+    """"Landwind" starts with "Land" but is not a Land Rover."""
+    assert naming.split_embedded_model("Landwind", "X7", {"land", "landwind"}) == (
+        "Landwind", "X7",
+    )
+
+
+def test_the_model_is_not_repeated_if_it_already_says_it():
+    make, model = naming.split_embedded_model(
+        "Porsche Taycan", "Taycan Turbo S", {"porsche"}
+    )
+    assert (make, model) == ("Porsche", "Taycan Turbo S")
+
+
+def test_the_shortest_manufacturer_wins():
+    """So a chain lands on the manufacturer rather than halfway up it."""
+    make, _ = naming.split_embedded_model(
+        "Porsche Taycan 4", "Cross Turismo", {"porsche", "porsche taycan"}
+    )
+    assert make == "Porsche"

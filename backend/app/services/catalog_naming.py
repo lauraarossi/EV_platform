@@ -230,6 +230,37 @@ def _word_breaks(name: str) -> int:
     )
 
 
+def split_embedded_model(
+    make: str, model: str, known_make_keys: set[str]
+) -> tuple[str, str]:
+    """Move a model name out of the make field and back where it belongs.
+
+    Sources occasionally file a car under "Porsche Taycan" rather than
+    "Porsche", which then stands in the Make dropdown as though it were a
+    manufacturer. Repaired here, at ingest, rather than papered over when the
+    list is drawn: the row is simply wrong, and every reader of it would
+    otherwise need the same special case.
+
+    Only splits when the shorter form is a manufacturer *in the same import*,
+    and only on a word boundary — so nothing is broken up on the strength of a
+    shared prefix. The words taken off the make go to the front of the model,
+    since that is what they were describing.
+    """
+    key = make_key(make)
+    parents = [k for k in known_make_keys if k != key and key.startswith(k + " ")]
+    if not parents:
+        return make, model
+
+    parent = min(parents, key=len)
+    words = _primary(make).split()
+    kept = " ".join(words[: len(parent.split())])
+    extra = " ".join(words[len(parent.split()) :])
+
+    if extra and not normalise(model).startswith(normalise(extra)):
+        model = f"{extra} {model}".strip()
+    return kept or make, model
+
+
 def rekey(db) -> dict[str, int]:
     """Recompute every row's grouping keys.
 
@@ -237,17 +268,24 @@ def rekey(db) -> dict[str, int]:
     when they change, the stored keys are stale until this runs. Cheaper and
     far less alarming than re-importing all three sources to fix a name.
     """
+    from sqlalchemy import update
+
     from app.models.catalog import CatalogVehicle
 
-    changed = 0
     rows = db.query(CatalogVehicle).all()
-    for row in rows:
-        mk, mo = make_key(row.make), model_key(row.make, row.model)
-        if (row.make_key, row.model_key) != (mk, mo):
-            row.make_key, row.model_key = mk, mo
-            changed += 1
-    db.commit()
-    return {"rows": len(rows), "changed": changed}
+    updates = [
+        {"id": row.id, "make_key": mk, "model_key": mo}
+        for row, mk, mo in (
+            (r, make_key(r.make), model_key(r.make, r.model)) for r in rows
+        )
+        if (row.make_key, row.model_key) != (mk, mo)
+    ]
+
+    if updates:
+        db.execute(update(CatalogVehicle), updates)
+        db.commit()
+
+    return {"rows": len(rows), "changed": len(updates)}
 
 
 def choose_display(candidates: list[tuple[str, str]]) -> str:
