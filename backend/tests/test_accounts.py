@@ -362,3 +362,37 @@ def test_tariffs_are_private(client, signed_in, other_client):
 
     assert len(client.get("/api/v1/tariffs/").json()) == 1
     assert other_client.get("/api/v1/tariffs/").json() == []
+
+
+# --- one canonical hostname ---------------------------------------------------
+
+def test_www_redirects_to_the_bare_domain(client):
+    """A cookie set on the apex is not sent to www, so signing in on one would
+    look like being signed out on the other."""
+    r = client.get("/garage", headers={"host": "www.eevie.ie"}, follow_redirects=False)
+    assert r.status_code == 301
+    assert r.headers["location"].endswith("://eevie.ie/garage")
+
+
+def test_the_redirect_keeps_the_path_and_query(client):
+    r = client.get(
+        "/api/v1/catalog/models?make_key=renault",
+        headers={"host": "www.eevie.ie"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 301
+    assert r.headers["location"].endswith("://eevie.ie/api/v1/catalog/models?make_key=renault")
+
+
+def test_the_bare_domain_is_left_alone(client):
+    """Only www is redirected — everything else must pass straight through."""
+    r = client.get("/api/v1/health", headers={"host": "eevie.ie"})
+    assert r.status_code == 200
+
+
+def test_the_redirect_does_not_need_an_account(client):
+    """It runs outside the auth middleware, so it answers before anything asks
+    who you are."""
+    r = client.get("/api/v1/vehicles/", headers={"host": "www.eevie.ie"},
+                   follow_redirects=False)
+    assert r.status_code == 301

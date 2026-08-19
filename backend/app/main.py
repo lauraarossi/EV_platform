@@ -2,9 +2,9 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.router import router
@@ -59,6 +59,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Added last, so it wraps everything else and answers before any of it: a
+# redirect should not depend on the shared password or on CORS.
+@app.middleware("http")
+async def redirect_www(request: Request, call_next):
+    """Send www.example.com to example.com, keeping the path and query.
+
+    One canonical hostname, so links, bookmarks and the session cookie all
+    agree on where the app lives — a cookie set on the apex is not sent to the
+    www host, and signing in on one would look like being signed out on the
+    other.
+    """
+    host = request.headers.get("host", "").split(":")[0]
+    if not host.startswith("www."):
+        return await call_next(request)
+
+    bare = host[4:]
+    port = request.url.port
+    netloc = bare if port in (None, 80, 443) else f"{bare}:{port}"
+    return RedirectResponse(str(request.url.replace(netloc=netloc)), status_code=301)
+
 
 # API routes are registered first so they always win over the SPA catch-all below.
 app.include_router(docs_router)

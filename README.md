@@ -133,7 +133,7 @@ client id is needed, and it is public.
 
    ```
    http://localhost:5173        # local dev, where Vite serves the page
-   https://your-app.up.railway.app
+   https://eevie.ie
    ```
 
    **Authorised redirect URIs can stay empty** — the button hands the
@@ -149,6 +149,29 @@ client id is needed, and it is public.
 Leaving it empty hides the button entirely rather than showing one that cannot
 work. Signing in with Google against an address that already has a password
 account links the two rather than making a second one.
+
+---
+
+## Custom domain
+
+`www` is redirected to the bare domain by the app itself, so there is one
+canonical hostname. That matters more than tidiness: the session cookie is set
+for the host you signed in on, so without the redirect signing in at `www`
+would look like being signed out at the apex.
+
+Both hostnames still need to reach Railway — add each as a custom domain there,
+and point both at the CNAME target it gives you. Railway also issues a
+certificate per hostname, which it cannot do for a name it has not been told
+about.
+
+On Cloudflare, keep the records **DNS only** (grey cloud). Proxying puts
+Cloudflare's TLS in front of Railway's, which ends in a redirect loop or a
+certificate that will not validate.
+
+Set `CORS_ORIGINS` to include the domain. It only matters in local development
+— production serves the app and the API from one process, so nothing is
+cross-origin — but a browser pointed at the API from elsewhere should behave
+predictably either way.
 
 ---
 
