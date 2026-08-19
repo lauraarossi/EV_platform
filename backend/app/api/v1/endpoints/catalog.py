@@ -116,7 +116,7 @@ def list_variants(
             status_code=422, detail="make_key and model_key (or make and model) are required"
         )
 
-    return db.scalars(
+    rows = db.scalars(
         select(CatalogVehicle)
         .where(CatalogVehicle.make_key == mk, CatalogVehicle.model_key == mo)
         # Commonly registered variants first, so the likely answer is near the top.
@@ -126,6 +126,54 @@ def list_variants(
             CatalogVehicle.variant,
         )
     ).all()
+    return _distinct_cars(rows)
+
+
+def _spec_signature(row: CatalogVehicle) -> tuple:
+    """What makes two rows the same car as far as a person choosing one cares.
+
+    Not the id: the sources hand out several for one car — VCA writes the model
+    name into some Description fields and not others, and EEA keys on a
+    consumption figure it sometimes derives — so identical entries appeared
+    twice in the picker.
+    """
+    return (
+        (row.trim or "").strip().lower(),
+        row.fuel_type,
+        row.engine_size_cc,
+        row.horsepower,
+        row.fuel_consumption_l_per_100km,
+        row.battery_capacity_kwh,
+        row.transmission,
+    )
+
+
+def _completeness(row: CatalogVehicle) -> int:
+    return sum(
+        getattr(row, field) is not None
+        for field in (
+            "trim", "battery_capacity_kwh", "wltp_range_km", "engine_size_cc",
+            "fuel_consumption_l_per_100km", "horsepower", "transmission",
+            "consumption_real_world_kwh_100km", "registration_count",
+        )
+    )
+
+
+def _distinct_cars(rows: list[CatalogVehicle]) -> list[CatalogVehicle]:
+    """One entry per distinct specification, keeping the fullest of each.
+
+    Belt as well as braces: the importers no longer create these, but rows from
+    before that fix are still stored, and a source can always find a new way to
+    describe one car twice.
+    """
+    best: dict[tuple, CatalogVehicle] = {}
+    for row in rows:
+        key = _spec_signature(row)
+        if key not in best or _completeness(row) > _completeness(best[key]):
+            best[key] = row
+    # The query's ordering is the useful one, so preserve it.
+    kept = {id(r) for r in best.values()}
+    return [r for r in rows if id(r) in kept]
 
 
 @router.get("/search", response_model=list[CatalogVehicleRead])

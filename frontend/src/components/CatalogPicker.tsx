@@ -4,6 +4,27 @@ import type { CatalogMake, CatalogModel, CatalogVehicle, FuelType } from '../typ
 import { Field, Select } from './form'
 
 /**
+ * A variant's label, with enough added to tell it from its namesakes.
+ *
+ * Two Audi e-tron GT "quattro" entries are different cars — 105 kWh and
+ * 93.4 kWh — but the catalogue's variant name says only "quattro", so the
+ * dropdown showed the same thing twice. Rather than pad every label, the
+ * distinguishing spec is added only where a name is actually shared.
+ */
+function labelFor(v: CatalogVehicle, all: CatalogVehicle[]): string {
+  const shared = all.filter(o => o.variant === v.variant).length > 1
+  if (!shared) return v.variant
+
+  const marks = [
+    v.battery_capacity_kwh ? `${v.battery_capacity_kwh} kWh` : null,
+    v.wltp_range_km ? `${Math.round(v.wltp_range_km)} km` : null,
+    v.horsepower ? `${v.horsepower} hp` : null,
+  ].filter(Boolean)
+
+  return marks.length ? `${v.variant} · ${marks.join(' · ')}` : v.variant
+}
+
+/**
  * Cascading make -> model -> variant picker.
  *
  * The dropdowns are keyed by the API's `make_key`/`model_key` rather than the
@@ -154,7 +175,7 @@ export default function CatalogPicker({
             <option value="">{modelKey ? 'Select…' : '—'}</option>
             {variants.map(v => (
               <option key={v.id} value={v.id}>
-                {v.variant}
+                {labelFor(v, variants)}
                 {v.model_year ? ` (${v.model_year})` : ''}
               </option>
             ))}

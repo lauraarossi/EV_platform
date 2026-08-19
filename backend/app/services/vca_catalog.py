@@ -218,12 +218,46 @@ def stated_power(description: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
+
+def prune_missing(db: Session, source, seen_ids: set) -> int:
+    """Drop rows of this source that the latest import no longer produced.
+
+    Without this an import only ever adds. Change how ids are built, or let the
+    source retire a variant, and the old rows sit in the catalogue for good —
+    which is how the picker came to list the same car twice.
+
+    Guarded so a truncated download cannot take the catalogue with it: if the
+    import produced less than half of what is already stored, something went
+    wrong upstream and nothing is deleted.
+    """
+    existing = {
+        c.id
+        for c in db.scalars(select(CatalogVehicle).where(CatalogVehicle.source == source))
+    }
+    stale = existing - seen_ids
+    if not stale or len(seen_ids) * 2 < len(existing):
+        return 0
+    db.query(CatalogVehicle).filter(CatalogVehicle.id.in_(stale)).delete(
+        synchronize_session=False
+    )
+    db.commit()
+    return len(stale)
+
+
 def make_row_id(row: dict) -> str:
+    """Keyed on the trim as kept, not on the raw Description.
+
+    The source writes the same car both ways — "Mazda CX-60 2.5 327ps Exclusive"
+    in one row and "2.5 327ps Exclusive" in another. `clean_trim` strips the
+    model prefix from both, so they displayed identically while hashing to two
+    different ids, and the picker listed the car twice.
+    """
+    model = _clean(row.get("Model"))
     parts = [
         "vca",
         _clean(row.get("Manufacturer")),
-        _clean(row.get("Model")),
-        _clean(row.get("Description")),
+        model,
+        clean_trim(row.get("Description", ""), model) or "",
         _clean(row.get("Engine Capacity")),
         _clean(row.get("Engine Power (PS)")),
         _clean(row.get("Transmission")),
@@ -355,6 +389,9 @@ def ingest(
             updated += int(changed)
 
     db.commit()
+    # Anything this file no longer describes, including rows left behind by an
+    # earlier id scheme.
+    prune_missing(db, CatalogSource.vca, set(seen))
 
     return VcaImportResult(
         file=source.name if source else (name or "uploaded"),

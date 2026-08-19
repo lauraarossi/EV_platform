@@ -154,8 +154,39 @@ def _title(make: str) -> str:
     return cleaned
 
 
+
+def prune_missing(db: Session, source, seen_ids: set) -> int:
+    """Drop rows of this source that the latest import no longer produced.
+
+    Without this an import only ever adds. Change how ids are built, or let the
+    source retire a variant, and the old rows sit in the catalogue for good —
+    which is how the picker came to list the same car twice.
+
+    Guarded so a truncated download cannot take the catalogue with it: if the
+    import produced less than half of what is already stored, something went
+    wrong upstream and nothing is deleted.
+    """
+    existing = {
+        c.id
+        for c in db.scalars(select(CatalogVehicle).where(CatalogVehicle.source == source))
+    }
+    stale = existing - seen_ids
+    if not stale or len(seen_ids) * 2 < len(existing):
+        return 0
+    db.query(CatalogVehicle).filter(CatalogVehicle.id.in_(stale)).delete(
+        synchronize_session=False
+    )
+    db.commit()
+    return len(stale)
+
+
 def make_row_id(row: dict) -> str:
-    """Stable id so re-importing updates in place."""
+    """Stable id so re-importing updates in place.
+
+    Consumption is deliberately not part of it. It is derived from CO2 when the
+    source omits it, so a row missing the raw figure keyed as "x" while showing
+    the same derived value as its twin — two ids, one visible car.
+    """
     parts = [
         "eea",
         _clean(row["Mk"]).lower().replace(" ", "-"),
@@ -163,7 +194,6 @@ def make_row_id(row: dict) -> str:
         str(row.get("Ft") or "").replace("/", "-"),
         str(row.get("cc") or "x"),
         str(row.get("kw") or "x"),
-        str(row.get("l100") or "x"),
     ]
     slug = "-".join(parts)
     return re.sub(r"[^a-z0-9\-.]", "", slug.lower())[:160]
@@ -245,6 +275,10 @@ def ingest(
     across years, and `model_year` keeps the most recent year the spec was
     still being sold — which is what marks a car as discontinued.
     """
+    # Bound here because only the fetching path sets it, and pruning needs to
+    # know whether this import covered the whole catalogue or one year of it.
+    wanted: list[int] = []
+
     if rows is not None:
         # Direct rows are used by the tests; treat them as a single year.
         batches = [(years[0] if years else LATEST_YEAR, rows)]
@@ -314,6 +348,11 @@ def ingest(
             updated += int(changed)
 
     db.commit()
+    # Only when this import covered every year available. Importing a single
+    # year produces a fraction of the catalogue, and pruning against that would
+    # delete every other year's cars.
+    if set(wanted) == set(TABLES):
+        prune_missing(db, CatalogSource.eea, set(aggregated))
 
     return EeaImportResult(
         country=country,

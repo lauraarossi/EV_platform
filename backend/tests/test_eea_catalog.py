@@ -62,13 +62,21 @@ def test_unknown_fuel_label_is_skipped(db):
 
 
 def test_import_is_idempotent(db):
-    rows = [eea_row(), eea_row(l100=6.0, regs=156)]
+    rows = [eea_row(), eea_row(cc=1998, regs=156)]
     first = eea_catalog.ingest(db, rows=rows)
     assert first.inserted == 2
 
     second = eea_catalog.ingest(db, rows=rows)
     assert second.inserted == 0 and second.updated == 0
     assert db.query(CatalogVehicle).count() == 2
+
+
+def test_consumption_does_not_make_it_a_different_car(db):
+    """It used to be part of the row's identity, so a row missing the raw
+    figure keyed separately from its twin while displaying the same derived
+    value — the same car, listed twice in the picker."""
+    eea_catalog.ingest(db, rows=[eea_row(), eea_row(l100=6.0)])
+    assert db.query(CatalogVehicle).count() == 1
 
 
 def test_registration_count_updates_on_refresh(db):

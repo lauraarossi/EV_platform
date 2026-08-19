@@ -246,3 +246,42 @@ def test_small_differences_are_not_treated_as_conflicts(db):
     row = db.query(CatalogVehicle).one()
     assert row.horsepower == 91                 # the declared figure stands
     assert row.data_quality == "manufacturer declared"
+
+
+def test_the_same_car_described_two_ways_is_one_entry(db):
+    """The source writes the model into some Description fields and not others.
+    Both clean to the same trim, so they showed as identical entries in the
+    picker while hashing to two different ids."""
+    # The Model column carries the make for some marques, exactly as here.
+    rows = [
+        vca_row(Model="Mazda CX-60", Description="Mazda CX-60 2.5 327ps AWD Exclusive"),
+        vca_row(Model="Mazda CX-60", Description="2.5 327ps AWD Exclusive"),
+    ]
+    vca_catalog.ingest(db, data=build_zip(rows))
+    assert db.query(CatalogVehicle).count() == 1
+
+
+def test_rows_the_file_no_longer_describes_are_dropped(db):
+    """An import that only ever adds leaves the catalogue full of cars no
+    source still lists — including rows left behind by an older id scheme."""
+    vca_catalog.ingest(db, data=build_zip([
+        vca_row(Model="Old", Description="discontinued"),
+        vca_row(Model="Kept", Description="still sold"),
+    ]))
+    assert db.query(CatalogVehicle).count() == 2
+
+    vca_catalog.ingest(db, data=build_zip([
+        vca_row(Model="Kept", Description="still sold"),
+    ]))
+    assert [c.model for c in db.query(CatalogVehicle).all()] == ["Kept"]
+
+
+def test_a_truncated_file_cannot_empty_the_catalogue(db):
+    """A half-downloaded file should not look like "everything was retired"."""
+    vca_catalog.ingest(db, data=build_zip([
+        vca_row(Model=f"Model {i}", Description=f"trim {i}") for i in range(10)
+    ]))
+    assert db.query(CatalogVehicle).count() == 10
+
+    vca_catalog.ingest(db, data=build_zip([vca_row(Model="Model 0", Description="trim 0")]))
+    assert db.query(CatalogVehicle).count() == 10        # nothing pruned
