@@ -5,13 +5,16 @@ import App from './App.tsx'
 import { ThemeProvider } from './hooks/useTheme'
 import { AuthProvider } from './hooks/useAuth'
 import { UnitsProvider } from './hooks/useUnits'
+import { CurrencyProvider } from './hooks/useCurrency'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider>
       <AuthProvider>
         <UnitsProvider>
-          <App />
+          <CurrencyProvider>
+            <App />
+          </CurrencyProvider>
         </UnitsProvider>
       </AuthProvider>
     </ThemeProvider>

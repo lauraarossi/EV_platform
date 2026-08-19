@@ -23,6 +23,7 @@ from app.models.import_run import ImportRun, ImportStatus
 from app.models.user import User
 from app.services import (
     catalog_naming,
+    fx,
     eea_catalog,
     ev_catalog,
     merge_catalog,
@@ -113,6 +114,16 @@ TASKS: dict[str, Task] = {
             "entry. Run after the naming rules change; imports nothing."
         ),
         run=lambda db, params: catalog_naming.rekey(db),
+    ),
+    "fx": Task(
+        key="fx",
+        label="Exchange rates",
+        description=(
+            "Daily euro reference rates from the ECB, so costs can be shown in "
+            "pounds or dollars. Worth running daily; rates only move on "
+            "working days."
+        ),
+        run=lambda db, params: fx.ingest(db),
     ),
     "oil-bulletin": Task(
         key="oil-bulletin",

@@ -36,6 +36,7 @@ def _as_read(user: User) -> UserRead:
         has_password=user.password_hash is not None,
         has_google=user.google_sub is not None,
         is_admin=user.is_admin,
+        currency=user.currency or "EUR",
     )
 
 

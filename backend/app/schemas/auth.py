@@ -30,6 +30,7 @@ class UserRead(BaseModel):
     # Drives whether the Admin tab is offered. The server enforces the role
     # regardless — hiding the link is a courtesy, not the control.
     is_admin: bool = False
+    currency: str = "EUR"
 
     model_config = {"from_attributes": True}
 

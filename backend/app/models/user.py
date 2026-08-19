@@ -48,6 +48,10 @@ class User(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_login_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True))
 
+    # What to show money in. A display choice, like metric or imperial: amounts
+    # are stored in the currency they were entered in and converted at the edge.
+    currency: Mapped[str] = mapped_column(String(3), default="EUR", server_default="EUR")
+
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole), default=UserRole.user, server_default=UserRole.user.value,
         nullable=False, index=True,

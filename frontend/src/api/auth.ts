@@ -9,6 +9,9 @@ export interface AuthUser {
   has_google: boolean
   /** Whether to offer the Admin tab. The server enforces the role itself. */
   is_admin: boolean
+  /** Kept on the account, not the browser: it changes how entered money reads
+   *  back, so it should follow you to another device. */
+  currency: string
 }
 
 export interface AuthOptions {

@@ -10,6 +10,7 @@ import { CHARGER_LABEL, type ChargerType } from '../types'
 import { eventNoun, takesElectricity } from '../fuel'
 import { useAsync } from '../hooks/useAsync'
 import { useUnits } from '../hooks/useUnits'
+import { useCurrency } from '../hooks/useCurrency'
 import PageHeader from '../components/PageHeader'
 import GlassCard from '../components/GlassCard'
 import StatTile from '../components/StatTile'
@@ -25,6 +26,7 @@ const shortDate = (iso: string) =>
 
 export default function Stats() {
   const { units } = useUnits()
+  const money = useCurrency()
   const [vehicleId, setVehicleId] = useState<number | null>(null)
 
   const { data, error, loading, reload } = useAsync(async () => {
@@ -145,7 +147,7 @@ export default function Stats() {
         <StatTile
           label="Running cost"
           unit={units.costUnit}
-          value={units.costPerDistanceValue(summary.avg_cost_per_100km)}
+          value={money.format(units.costPerDistanceAmount(summary.avg_cost_per_100km), units.costDigits)}
           accent="var(--accent-3)"
         />
         <StatTile
@@ -153,10 +155,10 @@ export default function Stats() {
           value={
             electric
               ? summary.avg_price_per_kwh != null
-                ? `€${summary.avg_price_per_kwh.toFixed(3)}`
+                ? money.format(summary.avg_price_per_kwh, 3)
                 : '—'
               : summary.avg_price_per_litre != null
-                ? `€${summary.avg_price_per_litre.toFixed(3)}`
+                ? money.format(summary.avg_price_per_litre, 3)
                 : '—'
           }
           unit={electric ? '/kWh' : '/L'}
@@ -178,7 +180,7 @@ export default function Stats() {
         />
         <StatTile
           label="Total spend"
-          value={`€${summary.total_cost.toFixed(2)}`}
+          value={money.format(summary.total_cost)}
           hint={
             electric
               ? `${summary.total_energy_added_kwh.toFixed(1)} kWh added`
@@ -301,7 +303,7 @@ export default function Stats() {
                     {i.co2_g_per_km != null ? fmtCo2(i.co2_g_per_km) : '—'}
                   </td>
                   <td className="readout px-4 py-3 text-ink-2">
-                    {units.costPerDistance(i.cost_per_100km)}
+                    {units.costPerDistance(i.cost_per_100km, (v, d) => money.format(v, d))}
                   </td>
                   <td className="px-4 py-3 capitalize text-ink-2">{i.driving_mix ?? '—'}</td>
                 </tr>

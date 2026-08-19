@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import type { FuelEvent, FuelEventInput, Vehicle } from '../types'
 import { CHARGER_LABEL, DRIVING_MIX_LABEL } from '../types'
 import { burnsFuel, takesElectricity } from '../fuel'
+import { useCurrency } from '../hooks/useCurrency'
 import { Field, TextInput, Select, FormError } from './form'
 import { useUnits } from '../hooks/useUnits'
 
@@ -47,6 +48,7 @@ export default function FuelEventForm({
   onCancel: () => void
 }) {
   const { units } = useUnits()
+  const money = useCurrency()
   const [f, setF] = useState({
     vehicle_id: String(existing?.vehicle_id ?? defaultVehicleId ?? vehicles[0]?.id ?? ''),
     date: existing?.date ?? today(),
@@ -244,7 +246,7 @@ export default function FuelEventForm({
           </Field>
         )}
 
-        <Field label="Cost (€)">
+        <Field label={`Cost (${money.symbol.trim()})`}>
           <TextInput
             type="number" step="0.01" min="0"
             value={f.cost} onChange={set('cost')} placeholder="e.g. 7.80"

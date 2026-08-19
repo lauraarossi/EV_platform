@@ -43,11 +43,17 @@ export interface Units {
   efficiency: (kwhPer100km: number | null | undefined) => string
   consumption: (lPer100km: number | null | undefined) => string
   weight: (kg: number | null | undefined) => string
-  costPerDistance: (costPer100km: number | null | undefined) => string
-  /** The money on its own, plus its suffix — so a tile can set the suffix in
-   *  small type instead of overflowing with "EUR 43.92/100km" at heading size. */
-  costPerDistanceValue: (costPer100km: number | null | undefined) => string
+  costPerDistance: (
+    costPer100km: number | null | undefined,
+    money?: (v: number, digits: number) => string,
+  ) => string
+  /** The cost per displayed distance unit, still in the base currency — the
+   *  currency layer puts the symbol on. Separated from its suffix so a tile can
+   *  set the suffix in small type rather than overflowing at heading size. */
+  costPerDistanceAmount: (costPer100km: number | null | undefined) => number | null
   costUnit: string
+  /** Per mile needs a third decimal; per 100 km does not. */
+  costDigits: number
 
   /** Form helpers: what the user typed -> km for storage, and back. */
   toKm: (entered: number) => number
@@ -87,20 +93,20 @@ export function makeUnits(system: UnitSystem): Units {
     weight: kg => (kg == null ? '—' : `${num(imperial ? kgToLb(kg) : kg, 0)} ${imperial ? 'lb' : 'kg'}`),
 
     costUnit: imperial ? '/mi' : '/100km',
+    costDigits: imperial ? 3 : 2,
 
-    costPerDistanceValue: costPer100km => {
-      if (costPer100km == null) return '—'
-      return imperial
-        ? `€${num(costPer100km / kmToMiles(100), 3)}`
-        : `€${num(costPer100km, 2)}`
+    costPerDistanceAmount: costPer100km => {
+      if (costPer100km == null) return null
+      return imperial ? costPer100km / kmToMiles(100) : costPer100km
     },
 
-    costPerDistance: costPer100km => {
+    costPerDistance: (costPer100km, money) => {
       if (costPer100km == null) return '—'
       // Per 100 km reads oddly in imperial; per mile is the familiar figure.
-      return imperial
-        ? `€${num(costPer100km / kmToMiles(100), 3)}/mi`
-        : `€${num(costPer100km, 2)}/100km`
+      const value = imperial ? costPer100km / kmToMiles(100) : costPer100km
+      const digits = imperial ? 3 : 2
+      const shown = money ? money(value, digits) : `€${num(value, digits)}`
+      return `${shown}${imperial ? '/mi' : '/100km'}`
     },
 
     toKm: entered => (imperial ? milesToKm(entered) : entered),

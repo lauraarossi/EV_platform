@@ -10,6 +10,7 @@ from app.api.v1.endpoints import (
     fuel_prices,
     tariffs,
     catalog,
+    currency,
 )
 from app.security import get_current_user
 
@@ -31,6 +32,7 @@ router.include_router(tariffs.router)
 signed_in = [Depends(get_current_user)]
 router.include_router(fuel_prices.router, dependencies=signed_in)
 router.include_router(catalog.router, dependencies=signed_in)
+router.include_router(currency.router, dependencies=signed_in)
 
 # Admin only, enforced on the router itself rather than route by route. Every
 # data refresh lives here, so there is no ungated path that skips the record

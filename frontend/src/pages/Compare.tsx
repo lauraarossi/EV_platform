@@ -5,6 +5,7 @@ import { FUEL_LABEL, eventNoun, takesElectricity } from '../fuel'
 import { useAsync } from '../hooks/useAsync'
 import { useDebounced } from '../hooks/useDebounced'
 import { useUnits } from '../hooks/useUnits'
+import { useCurrency } from '../hooks/useCurrency'
 import PageHeader from '../components/PageHeader'
 import GlassCard from '../components/GlassCard'
 import StatTile from '../components/StatTile'
@@ -29,6 +30,7 @@ const detail = (e: unknown) =>
  */
 export default function Compare() {
   const { units } = useUnits()
+  const money = useCurrency()
   const [mineId, setMineId] = useState<number | null>(null)
   const [otherId, setOtherId] = useState<number | null>(null)
 
@@ -286,25 +288,25 @@ export default function Compare() {
       <section aria-label="Cost comparison" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
           label={`${yourName} would cost`}
-          value={`€${fmt(comparison.actual_cost)}`}
+          value={`${money.format(comparison.actual_cost)}`}
           hint={`${fmt(comparison.your_quantity, 1)} ${yourUnitLabel} at ${comparison.your_basis} ${comparison.basis_label}`}
         />
         <StatTile
           label={`${theirName} would cost`}
-          value={`€${fmt(comparison.alternative_cost)}`}
+          value={`${money.format(comparison.alternative_cost)}`}
           hint={`${fmt(comparison.quantity, 1)} ${comparison.unit_label} at ${comparison.basis} ${comparison.basis_label}`}
           accent="var(--series-2)"
         />
         <StatTile
           label={units.system === 'imperial' ? 'First per mile' : 'First per 100km'}
           unit={units.costUnit}
-          value={units.costPerDistanceValue(comparison.actual_cost_per_100km)}
+          value={money.format(units.costPerDistanceAmount(comparison.actual_cost_per_100km), units.costDigits)}
           accent="var(--accent-3)"
         />
         <StatTile
           label={units.system === 'imperial' ? 'Second per mile' : 'Second per 100km'}
           unit={units.costUnit}
-          value={units.costPerDistanceValue(comparison.alternative_cost_per_100km)}
+          value={money.format(units.costPerDistanceAmount(comparison.alternative_cost_per_100km), units.costDigits)}
           accent="var(--series-2)"
         />
       </section>
@@ -318,7 +320,7 @@ export default function Compare() {
         {comparison.actual_spend > 0 && (
           <>
             {' '}You actually spent{' '}
-            <span className="text-ink-2">€{fmt(comparison.actual_spend)}</span> over that stretch.
+            <span className="text-ink-2">{money.format(comparison.actual_spend)}</span> over that stretch.
           </>
         )}
       </p>
@@ -395,7 +397,7 @@ export default function Compare() {
                   : `${theirName} is the cheaper car`}
             </p>
             <p className="readout mt-1 text-3xl font-semibold text-ink">
-              €{fmt(Math.abs(comparison.saving))}
+              {money.format(Math.abs(comparison.saving))}
             </p>
             <p className="mt-1 text-sm text-ink-2">
               {identical ? 'difference' : ahead ? 'saved' : 'extra'} over{' '}
@@ -444,11 +446,11 @@ export default function Compare() {
                     <td className="readout px-4 py-3 text-ink">{units.distance(i.distance_km)}</td>
                     <td className="readout px-4 py-3 text-ink-2">{fmt(i.quantity, 1)}</td>
                     <td className="readout px-4 py-3 text-ink">
-                      {i.unit_price != null ? `€${fmt(i.unit_price, 3)}` : '—'}
+                      {i.unit_price != null ? `${money.format(i.unit_price, 3)}` : '—'}
                     </td>
                     <td className="readout px-4 py-3 text-ink-3">{i.price_as_of ?? '—'}</td>
                     <td className="readout px-4 py-3 font-medium text-ink">
-                      {i.cost != null ? `€${fmt(i.cost)}` : '—'}
+                      {i.cost != null ? `${money.format(i.cost)}` : '—'}
                     </td>
                   </tr>
                 ))}

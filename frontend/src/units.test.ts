@@ -64,17 +64,23 @@ describe('formatting', () => {
 })
 
 describe('cost per distance in a stat tile', () => {
-  it('separates the money from its suffix, so long values fit', () => {
+  it('separates the amount from its suffix, so long values fit', () => {
     const metric = makeUnits('metric')
-    expect(metric.costPerDistanceValue(43.92)).toBe('€43.92')
+    expect(metric.costPerDistanceAmount(43.92)).toBeCloseTo(43.92, 2)
     expect(metric.costUnit).toBe('/100km')
+    expect(metric.costDigits).toBe(2)
 
     const imperial = makeUnits('imperial')
-    expect(imperial.costPerDistanceValue(4.17)).toBe('€0.067')
+    expect(imperial.costPerDistanceAmount(4.17)).toBeCloseTo(0.0671, 4)
     expect(imperial.costUnit).toBe('/mi')
+    expect(imperial.costDigits).toBe(3)
   })
 
-  it('still has nothing to show when there is no figure', () => {
-    expect(makeUnits('metric').costPerDistanceValue(null)).toBe('—')
+  it('leaves the currency symbol to the layer that knows it', () => {
+    // Amounts are held in euro and converted for display, so units.ts must not
+    // stamp a euro sign on a figure that may be shown in pounds.
+    expect(makeUnits('metric').costPerDistanceAmount(null)).toBeNull()
+    expect(makeUnits('metric').costPerDistance(43.92, v => `£${v.toFixed(2)}`))
+      .toBe('£43.92/100km')
   })
 })

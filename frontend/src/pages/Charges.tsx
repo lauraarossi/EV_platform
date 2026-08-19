@@ -12,6 +12,7 @@ import { CHARGER_LABEL } from '../types'
 import { EventNoun, burnsFuel, eventNoun, takesElectricity } from '../fuel'
 import { useAsync } from '../hooks/useAsync'
 import { useUnits } from '../hooks/useUnits'
+import { useCurrency } from '../hooks/useCurrency'
 import PageHeader from '../components/PageHeader'
 import GlassCard from '../components/GlassCard'
 import Modal from '../components/Modal'
@@ -33,6 +34,7 @@ function consumptionCell(iv: Interval | undefined, vehicle: Vehicle, units: Retu
 
 export default function Charges() {
   const { units } = useUnits()
+  const money = useCurrency()
   const [vehicleId, setVehicleId] = useState<number | null>(null)
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<FuelEvent | null>(null)
@@ -204,7 +206,7 @@ export default function Charges() {
                       <td className="readout px-3 py-3 text-ink">{added || '—'}</td>
                       <td className="readout px-3 py-3 text-ink-2">{levels || '—'}</td>
                       <td className="readout px-3 py-3 text-ink">
-                        {e.cost != null ? `€${e.cost.toFixed(2)}` : '—'}
+                        {money.format(e.cost)}
                       </td>
                       <td className="readout px-3 py-3">
                         {consumption ? (

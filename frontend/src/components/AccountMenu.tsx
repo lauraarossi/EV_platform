@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useUnits } from '../hooks/useUnits'
+import { useCurrency } from '../hooks/useCurrency'
 
 export default function AccountMenu() {
   const { user, signOut } = useAuth()
   const { units, setSystem } = useUnits()
+  const { code, choices, choose } = useCurrency()
   const [open, setOpen] = useState(false)
   const wrap = useRef<HTMLDivElement>(null)
 
@@ -85,6 +87,22 @@ export default function AccountMenu() {
                 )
               })}
             </div>
+          </div>
+
+          <div className="px-3 pb-1 pt-1.5">
+            <p className="text-[10px] uppercase tracking-wider text-ink-3">Currency</p>
+            <select
+              value={code}
+              onChange={e => { void choose(e.target.value) }}
+              aria-label="Currency"
+              className="focus-ring mt-1.5 w-full rounded-lg border border-edge bg-transparent px-2 py-1.5 text-xs text-ink"
+            >
+              {choices.map(c => (
+                <option key={c.code} value={c.code}>
+                  {c.symbol.trim()} {c.code}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="my-1 h-px bg-edge" />
