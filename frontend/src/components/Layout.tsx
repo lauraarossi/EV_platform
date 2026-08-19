@@ -46,7 +46,7 @@ export default function Layout() {
     <>
       <div className="relative z-[1] flex min-h-svh flex-col">
         <header className="sticky top-0 z-20 px-4 pt-4">
-          <div className="glass glass-sheen mx-auto flex max-w-6xl items-center gap-3 rounded-2xl px-4 py-2.5">
+          <div className="glass glass-frosted glass-sheen mx-auto flex max-w-6xl items-center gap-3 rounded-2xl px-4 py-2.5">
             <a href="/" className="focus-ring flex items-center gap-2.5 rounded-lg">
               <span
                 aria-hidden="true"
@@ -87,7 +87,7 @@ export default function Layout() {
 
         {/* Mobile nav — thumb-reachable, since this is a phone-first logging app */}
         <nav className="fixed inset-x-0 bottom-0 z-20 px-4 pb-4 md:hidden">
-          <div className="glass glass-sheen mx-auto flex max-w-md items-center justify-between gap-1 rounded-2xl px-2 py-2">
+          <div className="glass glass-frosted glass-sheen mx-auto flex max-w-md items-center justify-between gap-1 rounded-2xl px-2 py-2">
             {items.map(({ to, label }) => (
               <NavLink key={to} to={to} end={to === '/'} className={navClass}>
                 {({ isActive }) => (

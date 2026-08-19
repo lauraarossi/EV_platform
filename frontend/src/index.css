@@ -15,10 +15,17 @@
   --plane: #f2f6fb;
   --plane-2: #e6eef8;
   /* Kept well below opaque: glass only reads as glass if the gradient behind
-     it actually shows through. A near-solid white fill just looks like paper. */
-  --surface: rgb(255 255 255 / 0.40);
+     it actually shows through. A near-solid white fill just looks like paper —
+     and at 0.40 it still did, because white over a pale field washes out the
+     colour it is supposed to be transmitting. Dark mode needs far less (0.045)
+     since any white at all reads against a near-black ground. */
+  --surface: rgb(255 255 255 / 0.28);
+  /* For panels that float over page content rather than over the background.
+     Heavy enough that text behind stops being readable, light enough that
+     colour still bleeds through and shifts as the page scrolls. */
+  --surface-frost: rgb(255 255 255 / 0.62);
   --surface-solid: #ffffff;
-  --surface-raised: rgb(255 255 255 / 0.58);
+  --surface-raised: rgb(255 255 255 / 0.44);
   --border: rgb(11 11 20 / 0.10);
   --border-strong: rgb(11 11 20 / 0.16);
 
@@ -42,13 +49,21 @@
   --critical: #d03b3b;
 
   --shadow-glass: 0 8px 32px rgb(11 11 20 / 0.08), 0 2px 8px rgb(11 11 20 / 0.04);
+  --glass-saturate: 240%;
   --blur: 16px;
+  /* Frosting is mostly this. 16px still leaves letterforms legible behind the
+     panel; at 28px they collapse into colour. */
+  --blur-frost: 28px;
 }
 
 .dark {
   --plane: #08080f;
   --plane-2: #0d0f1a;
   --surface: rgb(255 255 255 / 0.045);
+  /* Tinted from --surface-solid, not from white: a white wash over a dark page
+     reads as fog, where the panel's own colour reads as glass. */
+  --glass-saturate: 180%;
+  --surface-frost: rgb(15 16 24 / 0.72);
   --surface-solid: #0f1018;
   --surface-raised: rgb(255 255 255 / 0.07);
   --border: rgb(255 255 255 / 0.10);
@@ -125,11 +140,15 @@ body {
   background-color: var(--plane);
   background-repeat: no-repeat;
   background-attachment: fixed;
-  /* green → cyan → blue, so the field reads as one green/blue spectrum */
+  /* green → cyan → blue, so the field reads as one green/blue spectrum.
+     Deliberately wide: anchored at the corners and sized in vw, these covered a
+     phone entirely but left the middle of a desktop viewport nearly colourless
+     — which is exactly where the cards sit, so glass there had nothing to
+     transmit and read as plain white. */
   background-image:
-    radial-gradient(70vw 60vh at 12% -10%, color-mix(in oklab, var(--accent-2) 62%, transparent), transparent 66%),
-    radial-gradient(60vw 55vh at 90% -2%, color-mix(in oklab, var(--accent-3) 58%, transparent), transparent 64%),
-    radial-gradient(85vw 55vh at 55% 104%, color-mix(in oklab, var(--accent) 48%, transparent), transparent 66%);
+    radial-gradient(95vw 85vh at 10% -12%, color-mix(in oklab, var(--accent-2) 62%, transparent), transparent 70%),
+    radial-gradient(85vw 80vh at 92% -4%, color-mix(in oklab, var(--accent-3) 58%, transparent), transparent 68%),
+    radial-gradient(110vw 80vh at 55% 106%, color-mix(in oklab, var(--accent) 48%, transparent), transparent 70%);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -138,9 +157,9 @@ body {
 .dark body,
 html.dark body {
   background-image:
-    radial-gradient(70vw 60vh at 12% -10%, color-mix(in oklab, var(--accent-2) 55%, transparent), transparent 62%),
-    radial-gradient(60vw 55vh at 90% -2%, color-mix(in oklab, var(--accent-3) 45%, transparent), transparent 60%),
-    radial-gradient(85vw 55vh at 55% 104%, color-mix(in oklab, var(--accent) 52%, transparent), transparent 62%);
+    radial-gradient(95vw 85vh at 10% -12%, color-mix(in oklab, var(--accent-2) 55%, transparent), transparent 66%),
+    radial-gradient(85vw 80vh at 92% -4%, color-mix(in oklab, var(--accent-3) 45%, transparent), transparent 64%),
+    radial-gradient(110vw 80vh at 55% 106%, color-mix(in oklab, var(--accent) 52%, transparent), transparent 66%);
 }
 
 @layer components {
@@ -148,9 +167,30 @@ html.dark body {
   .glass {
     background: var(--surface);
     border: 1px solid var(--border);
-    backdrop-filter: blur(var(--blur)) saturate(180%);
-    -webkit-backdrop-filter: blur(var(--blur)) saturate(180%);
+    backdrop-filter: blur(var(--blur)) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(var(--blur)) saturate(var(--glass-saturate));
     box-shadow: var(--shadow-glass);
+  }
+
+  /* Frosted glass: readable over anything, without going flat.
+
+     The first attempt at this problem went fully opaque, which fixed the
+     reading and lost the material. What actually stops text showing through is
+     the blur radius rather than the opacity — so this leans on a much heavier
+     blur and only enough tint to carry it. */
+  .glass-frosted {
+    background: var(--surface-frost);
+    backdrop-filter: blur(var(--blur-frost)) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(var(--blur-frost)) saturate(var(--glass-saturate));
+  }
+
+  /* Where the browser cannot blur, opacity is all that is left, so it has to
+     do the whole job. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass-frosted {
+      background: linear-gradient(var(--surface-frost), var(--surface-frost)),
+                  var(--surface-solid);
+    }
   }
 
   /* A panel that floats over page content rather than over the background.
@@ -162,7 +202,6 @@ html.dark body {
      so the material still looks like the rest of the app; the raised shadow is
      what says it is floating. */
   .glass-popover {
-    background: linear-gradient(var(--surface), var(--surface)), var(--surface-solid);
     box-shadow:
       0 12px 32px -8px rgb(0 0 0 / 0.28),
       0 2px 8px -2px rgb(0 0 0 / 0.16);

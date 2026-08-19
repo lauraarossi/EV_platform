@@ -44,7 +44,7 @@ export default function Modal({
         aria-modal="true"
         aria-label={title}
         onClick={e => e.stopPropagation()}
-        className="glass glass-sheen mx-auto w-full max-w-2xl rounded-2xl outline-none"
+        className="glass glass-frosted glass-sheen mx-auto w-full max-w-2xl rounded-2xl outline-none"
       >
         <div className="flex items-center justify-between border-b border-edge px-5 py-3.5">
           <h2 className="text-base font-semibold text-ink">{title}</h2>

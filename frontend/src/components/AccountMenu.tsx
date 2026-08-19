@@ -47,7 +47,7 @@ export default function AccountMenu() {
       {open && (
         <div
           role="menu"
-          className="glass glass-popover glass-sheen absolute right-0 z-30 mt-2 w-56 rounded-xl p-1.5"
+          className="glass glass-frosted glass-popover glass-sheen absolute right-0 z-30 mt-2 w-56 rounded-xl p-1.5"
         >
           <div className="px-3 py-2">
             {user.display_name && (
