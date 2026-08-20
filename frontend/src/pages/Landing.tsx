@@ -14,8 +14,8 @@ import GlassCard from '../components/GlassCard'
 const STEPS = [
   {
     n: '01',
-    title: 'Note it down at the charger',
-    body: 'A charge or a tank, with the odometer reading at the time. Two numbers and a date — the whole entry takes a few seconds while the cable is in.',
+    title: 'Note it down',
+    body: 'Input each charge or fill up, with the odometer reading at the time. Two numbers and a date — the whole entry takes a few seconds.',
   },
   {
     n: '02',
@@ -103,13 +103,12 @@ export default function Landing() {
             </h2>
             <p className="mt-4 max-w-3xl leading-relaxed text-ink-2">
               The figure on the spec sheet came from a laboratory. Yours comes from the roads you
-              actually drive — the traffic you sit in, the hill on the way home, the February
-              morning that changes everything. Both are true; only one of them is about your car.
+              actually drive: the traffic you sit in, the hill on the way home, the cold early mornings. 
+              Both are true; only one of them is about your car.
             </p>
             <p className="mt-4 max-w-3xl leading-relaxed text-ink-2">
               After a handful of entries you will know things about it that no brochure could
-              tell you, worked out from the two numbers you already have in front of you at
-              every charger and every pump.
+              tell you.
             </p>
           </GlassCard>
         </section>
