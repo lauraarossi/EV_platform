@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import * as authApi from '../api/auth'
 import type { AuthOptions } from '../api/auth'
 import { useAuth } from '../hooks/useAuth'
@@ -60,7 +61,8 @@ export default function SignIn() {
   return (
     <div className="grid min-h-svh place-items-center px-4 py-10">
       <div className="w-full max-w-md">
-        <div className="mb-6 flex items-center justify-center gap-2.5">
+        {/* The mark is a way back out: this is no longer the front door. */}
+        <Link to="/" className="focus-ring mb-6 flex items-center justify-center gap-2.5 rounded-lg">
           <span
             aria-hidden="true"
             className="grid h-9 w-9 place-items-center rounded-lg"
@@ -72,7 +74,7 @@ export default function SignIn() {
             </svg>
           </span>
           <span className="text-xl font-semibold tracking-tight text-ink">Eevie</span>
-        </div>
+        </Link>
 
         <GlassCard glassSheen className="p-6">
           <h1 className="text-lg font-semibold text-ink">

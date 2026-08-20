@@ -6,6 +6,7 @@ import Stats from './pages/Stats'
 import Compare from './pages/Compare'
 import Admin from './pages/Admin'
 import SignIn from './pages/SignIn'
+import Landing from './pages/Landing'
 import { useAuth } from './hooks/useAuth'
 
 export default function App() {
@@ -21,7 +22,20 @@ export default function App() {
     )
   }
 
-  if (!user) return <SignIn />
+  // Signed out, the front door is a page that says what this is — the only
+  // page a search engine can reach, since everything else needs an account.
+  // The form moves to its own address rather than standing in for the site.
+  if (!user) {
+    return (
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/sign-in" element={<SignIn />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    )
+  }
 
   return (
     <BrowserRouter>

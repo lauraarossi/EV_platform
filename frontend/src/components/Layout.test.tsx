@@ -3,10 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import Layout from './Layout'
-import { AuthProvider } from '../hooks/useAuth'
-import { ThemeProvider } from '../hooks/useTheme'
-import { UnitsProvider } from '../hooks/useUnits'
-import { CurrencyProvider } from '../hooks/useCurrency'
+import { Providers } from '../Providers'
 import { scrollTo } from '../test/setup'
 import type { AuthUser } from '../api/auth'
 
@@ -37,22 +34,16 @@ beforeEach(() => {
 async function renderLayout(as: AuthUser = user) {
   vi.mocked(getMe).mockResolvedValue(as)
   const view = render(
-    <ThemeProvider>
-      <AuthProvider>
-        <UnitsProvider>
-          <CurrencyProvider>
-            <MemoryRouter initialEntries={['/']}>
-              <Routes>
-                <Route path="/" element={<Layout />}>
-                  <Route index element={<p>the page</p>} />
-                  <Route path="stats" element={<p>stats</p>} />
-                </Route>
-              </Routes>
-            </MemoryRouter>
-          </CurrencyProvider>
-        </UnitsProvider>
-      </AuthProvider>
-    </ThemeProvider>,
+    <Providers>
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<p>the page</p>} />
+            <Route path="stats" element={<p>stats</p>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    </Providers>,
   )
   await waitFor(() => expect(screen.getByText('the page')).toBeInTheDocument())
   return view

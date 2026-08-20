@@ -10,5 +10,7 @@ Disallow: /charges
 Disallow: /stats
 Disallow: /compare
 Disallow: /admin
+# The form itself has nothing to read; the page linking to it does.
+Disallow: /sign-in
 
 Sitemap: https://eevie.ie/sitemap.xml
