@@ -6,8 +6,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#08080f" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#f2f6fb" media="(prefers-color-scheme: light)" />
-    <title>Eevie</title>
-    <meta name="description" content="Track what your EV really costs to run, and what the same driving would have cost in petrol." />
+    <title>Eevie — what your car actually costs to run</title>
+    <meta
+      name="description"
+      content="Log every charge or fill-up against your odometer and see what your car really costs per kilometre — then price the same driving in any other car, electric or not, at the rates that applied at the time."
+    />
+
+    <!-- One canonical address. The app also answers on its Railway hostname,
+         and without this the two would be indexed as duplicates. -->
+    <link rel="canonical" href="https://eevie.ie/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Eevie" />
+    <meta property="og:url" content="https://eevie.ie/" />
+    <meta property="og:title" content="Eevie — what your car actually costs to run" />
+    <meta
+      property="og:description"
+      content="Log every charge or fill-up against your odometer and see what your car really costs per kilometre — then price the same driving in any other car."
+    />
+    <meta property="og:locale" content="en_IE" />
+    <!-- No og:image yet: link previews will render as text until one exists.
+         It wants a 1200x630 PNG at /og.png. -->
+    <meta name="twitter:card" content="summary" />
     <script>
       // Stamp the theme before first paint so there is no flash of the
       // wrong mode. Must mirror initialTheme() in src/hooks/useTheme.tsx.

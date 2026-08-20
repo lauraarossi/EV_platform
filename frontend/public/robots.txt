@@ -1,0 +1,14 @@
+# Everything below the homepage needs an account, so it renders as the sign-in
+# page to a crawler — the same thin page under a dozen URLs. Better to say so
+# than to have them indexed as duplicates.
+User-agent: *
+Allow: /$
+Disallow: /api/
+Disallow: /docs
+Disallow: /garage
+Disallow: /charges
+Disallow: /stats
+Disallow: /compare
+Disallow: /admin
+
+Sitemap: https://eevie.ie/sitemap.xml
