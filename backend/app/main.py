@@ -115,4 +115,8 @@ if STATIC_DIR.is_dir():
             candidate = (STATIC_DIR / full_path).resolve()
             if candidate.is_file() and candidate.is_relative_to(STATIC_DIR):
                 return FileResponse(candidate)
-        return FileResponse(index_file)
+        # Never cached. This file names which hashed bundles to load, so a
+        # copy held by a browser points at assets a later deploy has removed —
+        # a blank screen rather than an old version. The bundles themselves
+        # carry a content hash and are safe to keep forever.
+        return FileResponse(index_file, headers={"Cache-Control": "no-cache"})

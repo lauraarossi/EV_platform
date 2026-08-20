@@ -409,3 +409,17 @@ def test_rs256_verification_is_actually_available():
     from jwt.api_jws import get_default_algorithms
 
     assert "RS256" in get_default_algorithms()
+
+
+def test_the_app_shell_is_never_cached(client, tmp_path, monkeypatch):
+    """It names which hashed bundles to load, so a held copy points at assets a
+    later deploy has removed — a blank screen rather than an old version."""
+    from app import main
+
+    if not main.STATIC_DIR.is_dir():
+        import pytest
+
+        pytest.skip("SPA is only mounted in the built image")
+
+    r = client.get("/")
+    assert r.headers.get("cache-control") == "no-cache"
