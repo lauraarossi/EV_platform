@@ -14,33 +14,33 @@ import GlassCard from '../components/GlassCard'
 const STEPS = [
   {
     n: '01',
-    title: 'Log the fill-up',
-    body: 'A charge or a tank, with the odometer reading at the time. Two numbers and a date — the whole entry takes a few seconds at the charger.',
+    title: 'Note it down at the charger',
+    body: 'A charge or a tank, with the odometer reading at the time. Two numbers and a date — the whole entry takes a few seconds while the cable is in.',
   },
   {
     n: '02',
-    title: 'The numbers derive themselves',
-    body: 'Distance comes from consecutive readings, consumption from the level either side. Nothing is stored that could be worked out, so nothing can drift out of step.',
+    title: 'Watch the picture build',
+    body: 'Distance, efficiency, running costs and emissions all follow from consecutive entries. There is nothing to calculate and nothing to keep in step.',
   },
   {
     n: '03',
-    title: 'Ask what another car would have cost',
-    body: 'Any car against any car — the one you drive, one you are weighing up, or the same car judged two different ways.',
+    title: 'Start asking questions',
+    body: 'Does it do better in summer? Is the motorway run cheaper than the back roads? What would that other car on your shortlist have managed?',
   },
 ]
 
 const POINTS = [
   {
-    title: 'Priced at the time, not today',
-    body: 'Each stretch of driving is costed at the pump price or electricity tariff that applied when you drove it. Pricing a year of history at this week’s rate would be wrong in whichever direction fuel has moved since.',
+    title: 'How efficient is it, really?',
+    body: 'Your own kWh or litres per 100 km, measured across every interval you have logged, sitting next to the figure on the spec sheet. Most cars have a story to tell here, and it is rarely the one in the brochure.',
   },
   {
-    title: 'Either direction',
-    body: 'Built for an EV owner asking what petrol would have cost, and equally for a diesel owner asking what an EV would have saved. Neither side is the special one.',
+    title: 'How does it compare?',
+    body: 'Any car against any car — one you own, one you are curious about, or the same car judged two different ways. Same distance, same prices, so what you are looking at is the difference between the cars.',
   },
   {
-    title: 'Like-for-like, or not — your call',
-    body: 'Both cars use the figures you entered, so two cars quoted the same come out identical. Weigh your own car towards what it actually achieves instead, and the page says plainly that the comparison has stopped being even.',
+    title: 'What is it emitting?',
+    body: 'CO2 from the fuel burned or the electricity generated, worked out the same way for both, so the environmental picture sits beside the financial one instead of being a separate argument.',
   },
 ]
 
@@ -72,12 +72,13 @@ export default function Landing() {
       <main>
         <section className="py-14 md:py-20">
           <h1 className="gradient-text max-w-3xl text-4xl font-semibold leading-tight tracking-tight md:text-6xl">
-            What your car actually costs to run
+            Get to know your car
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-relaxed text-ink-2">
-            Log every charge and fill-up against your odometer, and find out what a kilometre
-            really costs you — then price the same driving in a different car, electric or not,
-            at the rates that applied at the time.
+            Every charge and every fill-up tells you something. Note them down against your
+            odometer and the real picture builds itself — how efficient your car actually is,
+            what it costs to run, what it emits, and how it measures up against anything else
+            you are curious about.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link
@@ -98,18 +99,17 @@ export default function Landing() {
         <section aria-labelledby="problem" className="pb-14">
           <GlassCard className="p-7 md:p-10">
             <h2 id="problem" className="text-xl font-semibold tracking-tight text-ink md:text-2xl">
-              A laboratory figure is not your car
+              Your car has its own numbers
             </h2>
             <p className="mt-4 max-w-3xl leading-relaxed text-ink-2">
-              Manufacturers quote one number, produced under test conditions. It knows nothing
-              about the traffic you sit in, the February morning that halves your range, or the
-              hill you climb on the way home. Third-party “real world” estimates are still a
-              single guess made on someone else’s roads.
+              The figure on the spec sheet came from a laboratory. Yours comes from the roads you
+              actually drive — the traffic you sit in, the hill on the way home, the February
+              morning that changes everything. Both are true; only one of them is about your car.
             </p>
             <p className="mt-4 max-w-3xl leading-relaxed text-ink-2">
-              The only figure that describes your car is the one your own driving produces.
-              Eevie works it out from the two numbers you already have at every charger and
-              every pump.
+              After a handful of entries you will know things about it that no brochure could
+              tell you, worked out from the two numbers you already have in front of you at
+              every charger and every pump.
             </p>
           </GlassCard>
         </section>
@@ -132,7 +132,7 @@ export default function Landing() {
 
         <section aria-labelledby="different" className="pb-14">
           <h2 id="different" className="mb-4 text-[11px] uppercase tracking-wider text-ink-3">
-            What it does differently
+            Questions it answers
           </h2>
           <div className="grid gap-3 md:grid-cols-3">
             {POINTS.map(point => (
@@ -147,10 +147,11 @@ export default function Landing() {
         <section aria-labelledby="cta" className="pb-14">
           <GlassCard className="p-7 text-center md:p-10">
             <h2 id="cta" className="text-xl font-semibold tracking-tight text-ink md:text-2xl">
-              Two numbers at the charger, and the rest follows
+              Your car is already telling you things
             </h2>
             <p className="mx-auto mt-3 max-w-xl leading-relaxed text-ink-2">
-              Free to use. Your log is yours — nobody else can see what you drive.
+              Start writing them down and see what turns up. Free to use, and your log is
+              yours — nobody else can see what you drive.
             </p>
             <Link
               to="/sign-in"
@@ -164,8 +165,8 @@ export default function Landing() {
 
       <footer className="border-t border-edge py-8 text-sm text-ink-3">
         <p>
-          Eevie — running costs for electric and combustion cars, in Ireland and anywhere else
-          the numbers make sense.
+          Eevie — efficiency, running costs and emissions for electric and combustion cars, in
+          Ireland and anywhere else the numbers make sense.
         </p>
       </footer>
     </div>

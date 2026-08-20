@@ -32,9 +32,9 @@ describe('the front door', () => {
     render(<Providers><App /></Providers>)
 
     const heading = await screen.findByRole('heading', { level: 1 })
-    expect(heading).toHaveTextContent(/what your car actually costs to run/i)
+    expect(heading).toHaveTextContent(/get to know your car/i)
     // The thing a crawler needs and a login form does not have: prose.
-    expect(screen.getByText(/log every charge and fill-up/i)).toBeInTheDocument()
+    expect(screen.getByText(/every charge and every fill-up tells you something/i)).toBeInTheDocument()
     expect(screen.queryByLabelText(/password/i)).toBeNull()
   })
 
@@ -44,11 +44,12 @@ describe('the front door', () => {
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
   })
 
-  it('explains why a manufacturer figure is not enough', async () => {
+  it('makes the case for measuring your own car', async () => {
     // The reason the app exists; if this copy goes, the page says nothing
     // a hundred other pages do not.
     render(<Providers><App /></Providers>)
-    expect(await screen.findByText(/laboratory figure is not your car/i)).toBeInTheDocument()
+    expect(await screen.findByText(/came from a laboratory/i)).toBeInTheDocument()
+    expect(screen.getByText(/no brochure could/i)).toBeInTheDocument()
   })
 
   it('leads to the form without being the form', async () => {
@@ -67,13 +68,13 @@ describe('the front door', () => {
 
     await userEvent.click(screen.getByRole('link', { name: /eevie/i }))
     await waitFor(() =>
-      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/actually costs/i),
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/get to know your car/i),
     )
   })
 
   it('sends an unknown address to the landing page, not to a blank screen', async () => {
     window.history.pushState({}, '', '/garage')
     render(<Providers><App /></Providers>)
-    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(/actually costs/i)
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(/get to know your car/i)
   })
 })
