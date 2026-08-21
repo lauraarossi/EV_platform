@@ -96,14 +96,17 @@ export default function Stats() {
       consumptionOf(i) == null ? null : Number(format(consumptionOf(i)).replace(/,/g, '')),
     exact: exactOf(i),
   }))
+  // Both edges applied, not just the distance one: the axis is money per
+  // distance, so it has to follow the currency as well as the unit system.
   const costSeries = intervals
     .filter(i => i.cost_per_100km != null)
     .map(i => ({
       date: shortDate(i.end_date),
-      value:
-        units.system === 'imperial'
-          ? Number((i.cost_per_100km! / 62.1371).toFixed(3))
-          : i.cost_per_100km,
+      value: Number(
+        money
+          .convert(units.costPerDistanceAmount(i.cost_per_100km)!)
+          .toFixed(units.costDigits),
+      ),
     }))
 
   // Spend by charger type — where the money actually goes.
@@ -113,7 +116,10 @@ export default function Stats() {
       byCharger.set(e.charger_type, (byCharger.get(e.charger_type) ?? 0) + e.cost)
   })
   const chargerSeries = [...byCharger.entries()]
-    .map(([type, cost]) => ({ name: CHARGER_LABEL[type], value: Number(cost.toFixed(2)) }))
+    .map(([type, cost]) => ({
+      name: CHARGER_LABEL[type],
+      value: Number(money.convert(cost).toFixed(2)),
+    }))
     .sort((a, b) => b.value - a.value)
 
   const approximate = intervals.some(i => consumptionOf(i) != null && !exactOf(i))
@@ -167,10 +173,10 @@ export default function Stats() {
         />
         <StatTile
           label="CO2"
-          value={
-            summary.avg_co2_g_per_km != null ? fmtCo2(summary.avg_co2_g_per_km) : '—'
-          }
-          unit="g/km"
+          value={(v => (v != null ? fmtCo2(v) : '—'))(
+            units.co2PerDistance(summary.avg_co2_g_per_km),
+          )}
+          unit={units.co2Unit}
           hint={
             summary.total_co2_kg != null
               ? `${fmtCo2(summary.total_co2_kg)} kg so far`
@@ -238,7 +244,7 @@ export default function Stats() {
                 <CartesianGrid {...gridProps} />
                 <XAxis dataKey="date" {...axisProps} />
                 <YAxis {...axisProps} />
-                <Tooltip content={<Tip unit={units.system === 'imperial' ? '€/mi' : '€/100km'} />} cursor={{ stroke: 'var(--border-strong)' }} />
+                <Tooltip content={<Tip unit={`${money.symbol}${units.costUnit}`} />} cursor={{ stroke: 'var(--border-strong)' }} />
                 <Line
                   type="monotone" dataKey="value"
                   stroke="var(--series-3)" strokeWidth={2}
@@ -259,7 +265,7 @@ export default function Stats() {
                 <CartesianGrid {...gridProps} />
                 <XAxis dataKey="name" {...axisProps} />
                 <YAxis {...axisProps} />
-                <Tooltip content={<Tip unit="€" />} cursor={{ fill: 'var(--border)' }} />
+                <Tooltip content={<Tip unit={money.symbol} />} cursor={{ fill: 'var(--border)' }} />
                 <Bar dataKey="value" radius={[4, 4, 0, 0]} isAnimationActive={false}>
                   {chargerSeries.map((_, i) => (
                     <Cell key={i} fill="var(--series-1)" />
@@ -283,7 +289,7 @@ export default function Stats() {
             <thead>
               <tr className="border-b border-edge text-left">
                 {['Period', 'Distance', electric ? 'Energy used' : 'Fuel used', consumptionUnit,
-                  'g CO2/km', units.system === 'imperial' ? '€/mi' : '€/100km',
+                  `g CO2${units.co2Unit.replace('g', '')}`, `${money.symbol}${units.costUnit}`,
                   'Driving'].map(h => (
                   <th key={h} className="px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-ink-3">{h}</th>
                 ))}
@@ -300,7 +306,9 @@ export default function Stats() {
                   </td>
                   <td className="readout px-4 py-3 font-medium text-ink">{format(consumptionOf(i))}</td>
                   <td className="readout px-4 py-3 text-ink-2">
-                    {i.co2_g_per_km != null ? fmtCo2(i.co2_g_per_km) : '—'}
+                    {(v => (v != null ? fmtCo2(v) : '—'))(
+                      units.co2PerDistance(i.co2_g_per_km),
+                    )}
                   </td>
                   <td className="readout px-4 py-3 text-ink-2">
                     {units.costPerDistance(i.cost_per_100km, (v, d) => money.format(v, d))}
