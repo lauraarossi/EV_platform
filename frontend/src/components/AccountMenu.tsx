@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useUnits } from '../hooks/useUnits'
 import { useCurrency } from '../hooks/useCurrency'
+import FeedbackModal from './FeedbackModal'
 
 export default function AccountMenu() {
   const { user, signOut } = useAuth()
   const { units, setSystem } = useUnits()
   const { code, choices, choose } = useCurrency()
   const [open, setOpen] = useState(false)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
   const wrap = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -112,6 +114,14 @@ export default function AccountMenu() {
           <button
             type="button"
             role="menuitem"
+            onClick={() => { setOpen(false); setFeedbackOpen(true) }}
+            className="focus-ring w-full rounded-lg px-3 py-2 text-left text-sm text-ink-2 hover:text-ink"
+          >
+            Send feedback
+          </button>
+          <button
+            type="button"
+            role="menuitem"
             onClick={signOut}
             className="focus-ring w-full rounded-lg px-3 py-2 text-left text-sm text-ink-2 hover:text-ink"
           >
@@ -119,6 +129,8 @@ export default function AccountMenu() {
           </button>
         </div>
       )}
+
+      <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </div>
   )
 }

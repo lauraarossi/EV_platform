@@ -3,6 +3,7 @@ import datetime
 from pydantic import BaseModel
 
 from app.models.catalog import CatalogSource
+from app.models.feedback import FeedbackStatus
 from app.models.import_run import ImportStatus
 from app.models.user import UserRole
 
@@ -52,7 +53,27 @@ class AdminOverview(BaseModel):
     fuel_prices: int
     tariffs: int
 
+    # Surfaced on the overview so it is noticed without being looked for.
+    feedback_new: int
+
     tasks: list[TaskRead]
+
+
+class FeedbackRead(BaseModel):
+    id: int
+    message: str
+    page: str | None
+    user_agent: str | None
+    user_id: int | None
+    email: str | None
+    status: FeedbackStatus
+    created_at: datetime.datetime
+
+    model_config = {"from_attributes": True}
+
+
+class FeedbackStatusUpdate(BaseModel):
+    status: FeedbackStatus
 
 
 class AdminUserRead(BaseModel):

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.v1.endpoints import (
     admin,
+    feedback,
     auth,
     health,
     vehicles,
@@ -19,6 +20,8 @@ router = APIRouter(prefix="/api/v1")
 # Open: the health probe, and the sign-in routes themselves.
 router.include_router(health.router)
 router.include_router(auth.router)
+# Open too: the people most worth hearing from have not signed up yet.
+router.include_router(feedback.router)
 
 # Everything else requires an account. Vehicle, fuel-event, stats and tariff
 # endpoints also scope their queries to the caller — this only gates the door.

@@ -4,6 +4,7 @@ import ThemeToggle from './ThemeToggle'
 import AccountMenu from './AccountMenu'
 import { useAuth } from '../hooks/useAuth'
 import { useScrolled } from '../hooks/useScrolled'
+import { BetaBadge } from './BetaBadge'
 
 // Ordered as the workflow runs: set up a car, log charges, read the numbers,
 // then compare. '/' stays the Charges route since logging is the frequent task.
@@ -103,6 +104,7 @@ export default function Layout() {
               </svg>
             </span>
             <span className="ml-2.5 text-base font-semibold tracking-tight text-ink">Eevie</span>
+            <span className="ml-2"><BetaBadge /></span>
           </a>
 
           {/* Desktop nav */}

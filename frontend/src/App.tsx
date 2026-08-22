@@ -48,20 +48,20 @@ export default function App() {
   return (
     <BrowserRouter>
       <Suspense fallback={<Loading />}>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          {/* Logging is the thing you do most, so it is the landing page. */}
-          <Route index element={<Charges />} />
-          <Route path="garage" element={<Garage />} />
-          <Route path="stats" element={<Stats />} />
-          <Route path="compare" element={<Compare />} />
-          {/* Routed only for admins, so the page cannot be reached by typing
-              the URL. The API refuses regardless — this just avoids showing a
-              screenful of failed requests. */}
-          {user.is_admin && <Route path="admin" element={<Admin />} />}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Route>
-      </Routes>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            {/* Logging is the thing you do most, so it is the landing page. */}
+            <Route index element={<Charges />} />
+            <Route path="garage" element={<Garage />} />
+            <Route path="stats" element={<Stats />} />
+            <Route path="compare" element={<Compare />} />
+            {/* Routed only for admins, so the page cannot be reached by typing
+                the URL. The API refuses regardless — this just avoids showing a
+                screenful of failed requests. */}
+            {user.is_admin && <Route path="admin" element={<Admin />} />}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
       </Suspense>
     </BrowserRouter>
   )

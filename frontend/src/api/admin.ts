@@ -43,6 +43,7 @@ export interface AdminOverview {
   fuel_events: number
   fuel_prices: number
   tariffs: number
+  feedback_new: number
   tasks: AdminTask[]
 }
 

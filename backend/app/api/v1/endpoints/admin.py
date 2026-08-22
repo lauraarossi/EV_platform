@@ -20,6 +20,7 @@ from app.db.session import get_db
 from app.models.catalog import CatalogVehicle, CatalogSource
 from app.models.fuel_event import FuelEvent
 from app.models.fuel_price import FuelPrice
+from app.models.feedback import Feedback, FeedbackStatus
 from app.models.import_run import ImportRun, ImportStatus
 from app.models.tariff import ElectricityTariff
 from app.models.user import User, UserRole
@@ -27,6 +28,8 @@ from app.models.vehicle import Vehicle
 from app.schemas.admin import (
     AdminOverview,
     AdminUserRead,
+    FeedbackRead,
+    FeedbackStatusUpdate,
     CatalogueSourceStat,
     ImportRunRead,
     RoleUpdate,
@@ -97,6 +100,10 @@ def overview(db: Session = Depends(get_db)):
         fuel_events=db.scalar(select(func.count()).select_from(FuelEvent)) or 0,
         fuel_prices=db.scalar(select(func.count()).select_from(FuelPrice)) or 0,
         tariffs=db.scalar(select(func.count()).select_from(ElectricityTariff)) or 0,
+        feedback_new=db.scalar(
+            select(func.count()).select_from(Feedback)
+            .where(Feedback.status == FeedbackStatus.new)
+        ) or 0,
         tasks=[
             TaskRead(
                 key=t.key, label=t.label, description=t.description, slow=t.slow,
@@ -200,6 +207,39 @@ def list_runs(
     if task:
         stmt = stmt.where(ImportRun.task == task)
     return list(db.scalars(stmt))
+
+
+# --- feedback ----------------------------------------------------------------
+
+@router.get("/feedback", response_model=list[FeedbackRead])
+def list_feedback(
+    status: FeedbackStatus | None = None,
+    limit: int = Query(default=100, le=500),
+    db: Session = Depends(get_db),
+):
+    """Newest first — what someone just hit is likelier to matter than what
+    they hit last month."""
+    stmt = select(Feedback).order_by(Feedback.created_at.desc()).limit(limit)
+    if status:
+        stmt = stmt.where(Feedback.status == status)
+    return list(db.scalars(stmt))
+
+
+@router.patch("/feedback/{feedback_id}", response_model=FeedbackRead)
+def set_feedback_status(
+    feedback_id: int,
+    payload: FeedbackStatusUpdate,
+    db: Session = Depends(get_db),
+):
+    """Read, or dealt with. Nothing is deleted: a report that turned out to be
+    nothing is still evidence of what confused somebody."""
+    item = db.get(Feedback, feedback_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="No such feedback")
+    item.status = payload.status
+    db.commit()
+    db.refresh(item)
+    return item
 
 
 # --- accounts ----------------------------------------------------------------

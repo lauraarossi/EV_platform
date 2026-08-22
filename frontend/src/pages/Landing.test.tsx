@@ -78,3 +78,29 @@ describe('the front door', () => {
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(/get to know your car/i)
   })
 })
+
+describe('being honest about the state of it', () => {
+  it('says it is still being built', async () => {
+    render(<Providers><App /></Providers>)
+    expect(await screen.findByText(/in beta and still being built/i)).toBeInTheDocument()
+  })
+
+  it('reassures that data survives the building', async () => {
+    render(<Providers><App /></Providers>)
+    expect(await screen.findByText(/data stays put/i)).toBeInTheDocument()
+  })
+
+  it('opens the feedback form in place rather than sending you away', async () => {
+    render(<Providers><App /></Providers>)
+    await userEvent.click(await screen.findByRole('button', { name: /wrong or missing/i }))
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText(/what happened\?/i)).toBeInTheDocument()
+  })
+
+  it('asks a signed-out visitor for an address only if they want a reply', async () => {
+    render(<Providers><App /></Providers>)
+    await userEvent.click(await screen.findByRole('button', { name: /wrong or missing/i }))
+    expect(screen.getByText(/only if you want a reply/i)).toBeInTheDocument()
+  })
+})
