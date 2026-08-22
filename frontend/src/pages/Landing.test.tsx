@@ -90,11 +90,17 @@ describe('being honest about the state of it', () => {
     expect(await screen.findByText(/data stays put/i)).toBeInTheDocument()
   })
 
-  it('offers no feedback link until one points somewhere', async () => {
-    // An invitation to get in touch that leads nowhere is worse than not
-    // asking, so the link is hidden while FEEDBACK_URL is empty.
+  it('opens the feedback form in place rather than sending you away', async () => {
     render(<Providers><App /></Providers>)
-    await screen.findByText(/in beta/i)
-    expect(screen.queryByRole('link', { name: /wrong or missing/i })).toBeNull()
+    await userEvent.click(await screen.findByRole('button', { name: /wrong or missing/i }))
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText(/what happened\?/i)).toBeInTheDocument()
+  })
+
+  it('asks a signed-out visitor for an address only if they want a reply', async () => {
+    render(<Providers><App /></Providers>)
+    await userEvent.click(await screen.findByRole('button', { name: /wrong or missing/i }))
+    expect(screen.getByText(/only if you want a reply/i)).toBeInTheDocument()
   })
 })

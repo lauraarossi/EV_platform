@@ -1,4 +1,6 @@
-import { FEEDBACK_URL, IS_BETA } from '../site'
+import { useState } from 'react'
+import { IS_BETA } from '../site'
+import FeedbackModal from './FeedbackModal'
 
 /**
  * A small mark next to the name, so nobody has to discover that the thing is
@@ -24,25 +26,23 @@ export function BetaBadge() {
  * The fuller version, for a page with room to explain itself.
  */
 export function BetaNotice({ className = '' }: { className?: string }) {
+  const [open, setOpen] = useState(false)
   if (!IS_BETA) return null
   return (
-    <p className={`text-sm leading-relaxed text-ink-3 ${className}`}>
-      Eevie is in beta and still being built, so expect the odd rough edge and
-      the occasional change under your feet. Your data stays put through all of it.
-      {FEEDBACK_URL && (
-        <>
-          {' '}
-          <a
-            href={FEEDBACK_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="focus-ring rounded underline decoration-dotted underline-offset-2 hover:text-ink-2"
-          >
-            Tell me what is wrong or missing
-          </a>
-          {' — it is the fastest way to change what gets built next.'}
-        </>
-      )}
-    </p>
+    <>
+      <p className={`text-sm leading-relaxed text-ink-3 ${className}`}>
+        Eevie is in beta and still being built, so expect the odd rough edge and
+        the occasional change under your feet. Your data stays put through all of it.{' '}
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="focus-ring rounded underline decoration-dotted underline-offset-2 hover:text-ink-2"
+        >
+          Tell me what is wrong or missing
+        </button>
+        {' — it is the fastest way to change what gets built next.'}
+      </p>
+      <FeedbackModal open={open} onClose={() => setOpen(false)} />
+    </>
   )
 }

@@ -3,6 +3,7 @@ import {
   getOverview, getRuns, getUsers, runTask, setUserRole, uploadVca,
   type AdminOverview, type AdminUser, type ImportRun, type UserRole,
 } from '../api/admin'
+import { getFeedback, setFeedbackStatus, type Feedback, type FeedbackStatus } from '../api/feedback'
 import { useAuth } from '../hooks/useAuth'
 import PageHeader from '../components/PageHeader'
 import GlassCard from '../components/GlassCard'
@@ -51,15 +52,19 @@ export default function Admin() {
   const [overview, setOverview] = useState<AdminOverview | null>(null)
   const [runs, setRuns] = useState<ImportRun[]>([])
   const [users, setUsers] = useState<AdminUser[]>([])
+  const [feedback, setFeedback] = useState<Feedback[]>([])
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    const [o, r, u] = await Promise.all([getOverview(), getRuns(), getUsers()])
+    const [o, r, u, f] = await Promise.all([
+      getOverview(), getRuns(), getUsers(), getFeedback(),
+    ])
     setOverview(o)
     setRuns(r)
     setUsers(u)
+    setFeedback(f)
     return r
   }, [])
 
@@ -109,6 +114,22 @@ export default function Admin() {
     } finally {
       setBusy(null)
     }
+  }
+
+  const triage = async (item: Feedback, status: FeedbackStatus) => {
+    const updated = await setFeedbackStatus(item.id, status)
+    setFeedback(list => list.map(f => (f.id === updated.id ? updated : f)))
+    // Keep the badge honest without another round trip.
+    setOverview(o =>
+      o
+        ? {
+            ...o,
+            feedback_new: feedback.filter(f =>
+              f.id === updated.id ? updated.status === 'new' : f.status === 'new',
+            ).length,
+          }
+        : o,
+    )
   }
 
   const changeRole = async (target: AdminUser, role: UserRole) => {
@@ -313,6 +334,69 @@ export default function Admin() {
               ))}
             </tbody>
           </table>
+        )}
+      </GlassCard>
+
+      {/* --- feedback -------------------------------------------------------- */}
+      <h2 className="mb-3 mt-8 text-sm font-medium uppercase tracking-wider text-ink-3">
+        Feedback
+        {overview.feedback_new > 0 && (
+          <span
+            className="ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+            style={{
+              color: 'var(--accent)',
+              background: 'color-mix(in oklab, var(--accent) 14%, transparent)',
+            }}
+          >
+            {overview.feedback_new} new
+          </span>
+        )}
+      </h2>
+      <GlassCard className="p-1">
+        {feedback.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-ink-3">Nobody has said anything yet.</p>
+        ) : (
+          <ul>
+            {feedback.map(item => (
+              <li key={item.id} className="border-t border-edge px-4 py-3 first:border-0">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="text-xs text-ink-3">
+                    {when(item.created_at)}
+                    {item.page && <> · <span className="readout">{item.page}</span></>}
+                    {item.email && <> · {item.email}</>}
+                    {!item.user_id && <> · signed out</>}
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    {item.status !== 'new' && (
+                      <span className="text-[10px] uppercase tracking-wider text-ink-3">
+                        {item.status}
+                      </span>
+                    )}
+                    {item.status === 'new' && (
+                      <button
+                        type="button" onClick={() => triage(item, 'read')}
+                        className="focus-ring rounded px-1.5 py-0.5 text-xs text-ink-3 hover:text-ink"
+                      >
+                        Mark read
+                      </button>
+                    )}
+                    {item.status !== 'done' && (
+                      <button
+                        type="button" onClick={() => triage(item, 'done')}
+                        className="focus-ring rounded px-1.5 py-0.5 text-xs text-ink-3 hover:text-ink"
+                      >
+                        Done
+                      </button>
+                    )}
+                  </span>
+                </div>
+                <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink">{item.message}</p>
+                {item.user_agent && (
+                  <p className="mt-1 truncate text-[11px] text-ink-3">{item.user_agent}</p>
+                )}
+              </li>
+            ))}
+          </ul>
         )}
       </GlassCard>
 
