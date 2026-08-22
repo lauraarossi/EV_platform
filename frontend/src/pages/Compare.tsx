@@ -332,7 +332,7 @@ export default function Compare() {
           unit="kg CO2"
           hint={
             comparison.actual_co2_g_per_km != null
-              ? `${fmt(comparison.actual_co2_g_per_km, 0)} g/km`
+              ? `${fmt(units.co2PerDistance(comparison.actual_co2_g_per_km)!, 0)} ${units.co2Unit}`
               : undefined
           }
           accent="var(--accent-3)"
@@ -343,7 +343,7 @@ export default function Compare() {
           unit="kg CO2"
           hint={
             comparison.alternative_co2_g_per_km != null
-              ? `${fmt(comparison.alternative_co2_g_per_km, 0)} g/km`
+              ? `${fmt(units.co2PerDistance(comparison.alternative_co2_g_per_km)!, 0)} ${units.co2Unit}`
               : undefined
           }
           accent="var(--series-2)"

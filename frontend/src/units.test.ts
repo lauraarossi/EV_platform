@@ -84,3 +84,24 @@ describe('cost per distance in a stat tile', () => {
       .toBe('£43.92/100km')
   })
 })
+
+describe('emissions per distance', () => {
+  it('is per kilometre in metric', () => {
+    const u = makeUnits('metric')
+    expect(u.co2Unit).toBe('g/km')
+    expect(u.co2PerDistance(120)).toBe(120)
+  })
+
+  it('is per mile in imperial, since a mile is further', () => {
+    // Left unconverted, the CO2 tile read g/km whichever system was chosen —
+    // the one figure on the page that ignored the switch entirely.
+    const u = makeUnits('imperial')
+    expect(u.co2Unit).toBe('g/mi')
+    expect(u.co2PerDistance(120)).toBeCloseTo(193.12, 2)
+  })
+
+  it('has nothing to convert when there is nothing to show', () => {
+    expect(makeUnits('imperial').co2PerDistance(null)).toBeNull()
+    expect(makeUnits('metric').co2PerDistance(undefined)).toBeNull()
+  })
+})

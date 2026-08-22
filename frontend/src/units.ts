@@ -52,6 +52,10 @@ export interface Units {
    *  set the suffix in small type rather than overflowing at heading size. */
   costPerDistanceAmount: (costPer100km: number | null | undefined) => number | null
   costUnit: string
+  /** Emissions per unit of distance. Everything else on the page switches with
+   *  the unit system, and this was left reading g/km in both. */
+  co2Unit: string
+  co2PerDistance: (gramsPerKm: number | null | undefined) => number | null
   /** Per mile needs a third decimal; per 100 km does not. */
   costDigits: number
 
@@ -93,6 +97,9 @@ export function makeUnits(system: UnitSystem): Units {
     weight: kg => (kg == null ? '—' : `${num(imperial ? kgToLb(kg) : kg, 0)} ${imperial ? 'lb' : 'kg'}`),
 
     costUnit: imperial ? '/mi' : '/100km',
+    co2Unit: imperial ? 'g/mi' : 'g/km',
+    co2PerDistance: gramsPerKm =>
+      gramsPerKm == null ? null : imperial ? gramsPerKm * KM_PER_MILE : gramsPerKm,
     costDigits: imperial ? 3 : 2,
 
     costPerDistanceAmount: costPer100km => {
