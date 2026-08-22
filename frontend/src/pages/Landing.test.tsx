@@ -78,3 +78,23 @@ describe('the front door', () => {
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(/get to know your car/i)
   })
 })
+
+describe('being honest about the state of it', () => {
+  it('says it is still being built', async () => {
+    render(<Providers><App /></Providers>)
+    expect(await screen.findByText(/in beta and still being built/i)).toBeInTheDocument()
+  })
+
+  it('reassures that data survives the building', async () => {
+    render(<Providers><App /></Providers>)
+    expect(await screen.findByText(/data stays put/i)).toBeInTheDocument()
+  })
+
+  it('offers no feedback link until one points somewhere', async () => {
+    // An invitation to get in touch that leads nowhere is worse than not
+    // asking, so the link is hidden while FEEDBACK_URL is empty.
+    render(<Providers><App /></Providers>)
+    await screen.findByText(/in beta/i)
+    expect(screen.queryByRole('link', { name: /wrong or missing/i })).toBeNull()
+  })
+})

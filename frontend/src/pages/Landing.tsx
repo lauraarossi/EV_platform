@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import GlassCard from '../components/GlassCard'
+import { BetaBadge, BetaNotice } from '../components/BetaBadge'
 
 /**
  * The one page a signed-out visitor sees, and so the only one a search engine
@@ -59,6 +60,7 @@ export default function Landing() {
             </svg>
           </span>
           <span className="text-base font-semibold tracking-tight text-ink">Eevie</span>
+          <BetaBadge />
         </span>
 
         <Link
@@ -163,6 +165,7 @@ export default function Landing() {
       </main>
 
       <footer className="border-t border-edge py-8 text-sm text-ink-3">
+        <BetaNotice className="mb-4" />
         <p>
           Eevie — efficiency, running costs and emissions for electric and combustion cars, in
           Ireland and anywhere else the numbers make sense.
