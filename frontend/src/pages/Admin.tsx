@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  getOverview, getRuns, getUsers, runTask, setUserRole, uploadVca,
+  getOverview, getRuns, getUsers, runAll, runTask, setUserRole, uploadVca,
   type AdminOverview, type AdminUser, type ImportRun, type UserRole,
 } from '../api/admin'
 import { getFeedback, setFeedbackStatus, type Feedback, type FeedbackStatus } from '../api/feedback'
@@ -102,6 +102,21 @@ export default function Admin() {
     }
   }
 
+  const startAll = async () => {
+    if (!window.confirm('Refresh every source? The EEA import alone takes a few minutes.')) return
+    setBusy('all')
+    setNotice(null)
+    try {
+      const { started } = await runAll()
+      setNotice(`Refreshing ${started.length} sources, in order.`)
+      await load()
+    } catch (e: any) {
+      setNotice(e?.response?.data?.detail ?? 'Could not start the refresh.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const upload = async (file: File) => {
     setBusy('vca')
     setNotice(null)
@@ -186,9 +201,23 @@ export default function Admin() {
       </section>
 
       {/* --- refreshes ------------------------------------------------------ */}
-      <h2 className="mb-3 mt-8 text-sm font-medium uppercase tracking-wider text-ink-3">
-        Data refreshes
-      </h2>
+      <div className="mb-3 mt-8 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-medium uppercase tracking-wider text-ink-3">
+          Data refreshes
+        </h2>
+        <button
+          type="button"
+          onClick={startAll}
+          disabled={busy !== null || overview.tasks.some(t => t.last_run?.status === 'running')}
+          className="btn-primary focus-ring rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+        >
+          {busy === 'all' ? 'Starting…' : 'Run all'}
+        </button>
+      </div>
+      <p className="-mt-1 mb-3 text-xs text-ink-3">
+        Run all goes in dependency order — sources first, then the merge that
+        draws on them, then the regrouping. One failure does not stop the rest.
+      </p>
       <div className="grid gap-3 md:grid-cols-2">
         {overview.tasks.map(task => {
           const running = task.last_run?.status === 'running'

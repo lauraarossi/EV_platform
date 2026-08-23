@@ -319,3 +319,104 @@ def test_an_upload_actually_imports_the_rows(db):
     assert run.result["inserted"] == 4
     assert run.result["file"] == "up.zip"
     assert db.query(CatalogVehicle).count() == 4
+
+
+# --- refreshing everything at once --------------------------------------------
+
+def test_the_sequence_runs_sources_before_what_depends_on_them(db):
+    """Not an arbitrary order: merge fills EEA rows from evdb, so both must be
+    in first, and rekey regroups whatever arrived, so it goes last."""
+    order = admin_tasks.SEQUENCE
+    assert order.index("evdb") < order.index("merge")
+    assert order.index("eea") < order.index("merge")
+    assert order.index("merge") < order.index("rekey")
+    assert set(order) <= set(admin_tasks.TASKS)
+
+
+def test_run_all_records_each_task_separately(db, monkeypatch):
+    """One row per task, not one for the batch: a refresh that got three
+    sources in and failed on the fourth is worth being able to read."""
+    ran = []
+    for key in ("evdb", "rekey"):
+        monkeypatch.setitem(
+            admin_tasks.TASKS, key,
+            admin_tasks.Task(
+                key, key, "", lambda db, params, k=key: (ran.append(k), {"ok": k})[1]
+            ),
+        )
+    admin_tasks.run_sequence(["evdb", "rekey"], session_factory=lambda: _NoCloseSession(db))
+
+    assert ran == ["evdb", "rekey"]
+    runs = db.query(ImportRun).order_by(ImportRun.id).all()
+    assert [r.task for r in runs] == ["evdb", "rekey"]
+    assert all(r.status == ImportStatus.ok for r in runs)
+
+
+def test_one_failure_does_not_stop_the_rest(db, monkeypatch):
+    """The sources are independent, and the two that are not are better run
+    over whatever did arrive than skipped because something else was down."""
+    def explode(db, params):
+        raise RuntimeError("source is down")
+
+    monkeypatch.setitem(
+        admin_tasks.TASKS, "evdb", admin_tasks.Task("evdb", "EV database", "", explode)
+    )
+    admin_tasks.run_sequence(["evdb", "rekey"], session_factory=lambda: _NoCloseSession(db))
+
+    runs = {r.task: r for r in db.query(ImportRun).all()}
+    assert runs["evdb"].status == ImportStatus.failed
+    assert runs["rekey"].status == ImportStatus.ok
+
+
+def test_run_all_needs_the_admin_role(client, signed_in):
+    assert client.post("/api/v1/admin/tasks/run-all").status_code == 403
+
+
+def test_run_all_starts_and_says_what_it_started(client, signed_in, db, monkeypatch):
+    make_admin(db)
+    monkeypatch.setattr(admin_tasks, "run_sequence", lambda *a, **k: None)
+
+    r = client.post("/api/v1/admin/tasks/run-all")
+    assert r.status_code == 202
+    assert r.json()["started"] == admin_tasks.SEQUENCE
+
+
+def test_run_all_refuses_while_something_is_already_going(client, signed_in, db, monkeypatch):
+    import datetime as dt
+
+    make_admin(db)
+    monkeypatch.setattr(admin_tasks, "run_sequence", lambda *a, **k: None)
+    db.add(ImportRun(task="eea", status=ImportStatus.running,
+                     started_at=dt.datetime.now(dt.timezone.utc)))
+    db.commit()
+
+    r = client.post("/api/v1/admin/tasks/run-all")
+    assert r.status_code == 409
+    assert "eea" in r.json()["detail"]
+
+
+def test_the_scheduled_command_runs_the_same_sequence(monkeypatch):
+    """Railway's scheduler calls this, and it must not drift from what the
+    console does — the runs it records should be indistinguishable."""
+    from app import cli
+
+    called = {}
+    monkeypatch.setattr(admin_tasks, "run_sequence", lambda keys: called.setdefault("keys", keys))
+    assert cli.main(["refresh"]) == 0
+    assert called["keys"] == admin_tasks.SEQUENCE
+
+
+def test_the_command_can_be_pointed_at_one_task(monkeypatch):
+    from app import cli
+
+    called = {}
+    monkeypatch.setattr(admin_tasks, "run_sequence", lambda keys: called.setdefault("keys", keys))
+    assert cli.main(["refresh", "--only", "fx"]) == 0
+    assert called["keys"] == ["fx"]
+
+
+def test_the_command_refuses_a_task_that_does_not_exist(monkeypatch, capsys):
+    from app import cli
+
+    assert cli.main(["refresh", "--only", "nonsense"]) == 2
+    assert "Unknown task" in capsys.readouterr().err

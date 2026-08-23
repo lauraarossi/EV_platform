@@ -197,6 +197,27 @@ async def upload_vca(
     return ImportRunRead.model_validate(run)
 
 
+@router.post("/tasks/run-all", status_code=202)
+def run_everything(
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """Refresh everything, in the order the sources depend on each other.
+
+    Returns as soon as it has started. Each task records its own run, so the
+    history stays readable if one of them fails partway through.
+    """
+    already = [k for k in admin_tasks.SEQUENCE if _already_running(db, k)]
+    if already:
+        raise HTTPException(
+            status_code=409, detail=f"Already running: {', '.join(already)}"
+        )
+
+    background.add_task(admin_tasks.run_sequence, None, None, admin.id)
+    return {"started": admin_tasks.SEQUENCE}
+
+
 @router.get("/runs", response_model=list[ImportRunRead])
 def list_runs(
     task: str | None = None,
