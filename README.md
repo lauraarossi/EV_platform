@@ -200,6 +200,28 @@ how long it took, and what it returned or how it failed. A source that has been
 quietly failing for a month is the thing this is meant to surface, since the
 catalogue looks the same either way — the previous rows are still there.
 
+### Scheduling a refresh
+
+The sources move on their own — the Oil Bulletin weekly, the ECB's rates daily,
+the EEA's dataset once a year — so a refresh is worth running on a timer.
+
+It is scheduled **outside** the app, by Railway, rather than by a thread inside
+it. The web process is replaced on every deploy and can be restarted at any
+moment, so a timer sleeping until Tuesday is a schedule that quietly stops
+existing. Railway starts a one-off container and runs:
+
+```bash
+python -m app.cli refresh              # everything, in dependency order
+python -m app.cli refresh --only fx    # just the exchange rates
+python -m app.cli refresh --list       # what there is to run
+```
+
+Set it up under the service's **Settings → Cron Schedule**, with a standard
+cron expression — `0 3 * * 2` for 03:00 each Tuesday. Scheduled runs record
+themselves exactly as hand-started ones do, so the history in the console reads
+the same either way and a schedule that has silently stopped working is
+visible.
+
 ---
 
 ## Not built yet

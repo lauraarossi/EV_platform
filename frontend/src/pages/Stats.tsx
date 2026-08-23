@@ -144,6 +144,13 @@ export default function Stats() {
             electric ? summary.avg_efficiency_kwh_per_100km : summary.avg_consumption_l_per_100km,
           )}
           unit={consumptionUnit}
+          // The same figure inverted, since which direction reads naturally
+          // depends on where someone learned to drive.
+          alt={`${
+            electric
+              ? units.efficiencyAlt(summary.avg_efficiency_kwh_per_100km)
+              : units.consumptionAlt(summary.avg_consumption_l_per_100km)
+          } ${electric ? units.efficiencyAltUnit : units.consumptionAltUnit}`}
           hint={
             (electric ? summary.energy_is_exact : summary.volume_is_exact)
               ? `Measured from ${electric ? 'battery' : 'fuel'} %`

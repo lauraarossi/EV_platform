@@ -90,12 +90,36 @@ def compare_vehicles(
     # it weighs what the car actually achieves against what it is quoted at.
     alternative = owned_vehicle(db, user, comparison_vehicle_id)
 
+    # What the other car pays, if it is one of yours with something logged. A
+    # Showroom car has no history and falls through to the market.
+    other_events = (
+        events
+        if alternative.id == vehicle.id
+        else db.query(FuelEvent).filter(FuelEvent.vehicle_id == alternative.id).all()
+    )
+    other = metrics.summarise(other_events, alternative)
+    alternative_unit_price = (
+        other.avg_price_per_kwh
+        if alternative.fuel_type == FuelType.electric
+        else other.avg_price_per_litre
+    )
+
     logged, _ = metrics.build_intervals(events, vehicle)
 
     if distance_km is not None:
         intervals, measured = comparison.over_distance(distance_km), None
+        # Over a distance nobody drove there are no receipts, so the driven car
+        # would otherwise fall through to a tariff or a pump average — and to
+        # nothing at all where neither exists, which read as free. What it has
+        # actually been paying is better than both.
+        spent = metrics.summarise(events, vehicle)
+        driven_unit_price = (
+            spent.avg_price_per_kwh
+            if vehicle.fuel_type == FuelType.electric
+            else spent.avg_price_per_litre
+        )
     elif logged:
-        intervals = logged
+        intervals, driven_unit_price = logged, None
         # Offered as the other end of the slider, and reported either way so
         # the page can show what the entered figure is being weighed against.
         summary = metrics.summarise(events, vehicle)
@@ -122,6 +146,8 @@ def compare_vehicles(
             driven_vehicle=vehicle,
             measured_consumption=measured,
             measured_weight=measured_weight,
+            driven_unit_price=driven_unit_price,
+            alternative_unit_price=alternative_unit_price,
             apply_gap_to_alternative=apply_gap_to_alternative,
             fallback_price_per_litre=fallback_price_per_litre,
             fallback_price_per_kwh=fallback_price_per_kwh,

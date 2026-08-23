@@ -247,6 +247,8 @@ def compare(
     driven_vehicle: Vehicle,
     measured_consumption: float | None = None,
     measured_weight: float = 0.0,
+    driven_unit_price: float | None = None,
+    alternative_unit_price: float | None = None,
     apply_gap_to_alternative: bool = False,
     country: str = "IE",
     fallback_price_per_litre: float | None = None,
@@ -296,9 +298,21 @@ def compare(
         # other car's left the first side unpriced whenever the two differed.
         region = iv.location_city or ""
         paid = _paid_unit_price(iv)
+        if paid is None:
+            # A distance someone picked has no receipts behind it, so there is
+            # no price for that stretch. What the driven car has actually been
+            # paying is the closest thing to one, and it beats a tariff band or
+            # a national average for the same reason a receipt does.
+            paid = driven_unit_price
 
         if paid is not None and same_fuel:
-            unit_price, as_of, is_estimate = paid, iv.end_date, False
+            from_receipt = _paid_unit_price(iv) is not None
+            unit_price, as_of, is_estimate = paid, iv.end_date, not from_receipt
+        elif alternative_unit_price is not None:
+            # A car of your own, on a different fuel. It has its own receipts,
+            # and what it actually pays beats a national average for exactly
+            # the reason the driven car's does.
+            unit_price, as_of, is_estimate = alternative_unit_price, iv.end_date, True
         else:
             unit_price, as_of, is_estimate = _market_price(
                 db, user_id, comparison_vehicle, day, region, country,

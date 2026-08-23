@@ -35,6 +35,14 @@ export interface Units {
   distanceUnit: string
   efficiencyUnit: string
   consumptionUnit: string
+  /** The same figure the other way round, shown alongside.
+   *
+   *  Energy per distance and distance per energy are both in use, they point
+   *  in opposite directions — less is better, then more is better — and which
+   *  one a person reads fluently depends entirely on where they learned to
+   *  drive. Cheaper to print both than to make anyone convert in their head. */
+  efficiencyAltUnit: string
+  consumptionAltUnit: string
   weightUnit: string
 
   distance: (km: number | null | undefined, digits?: number) => string
@@ -42,6 +50,8 @@ export interface Units {
   distanceValue: (km: number | null | undefined, digits?: number) => string
   efficiency: (kwhPer100km: number | null | undefined) => string
   consumption: (lPer100km: number | null | undefined) => string
+  efficiencyAlt: (kwhPer100km: number | null | undefined) => string
+  consumptionAlt: (lPer100km: number | null | undefined) => string
   weight: (kg: number | null | undefined) => string
   costPerDistance: (
     costPer100km: number | null | undefined,
@@ -56,7 +66,7 @@ export interface Units {
    *  the unit system, and this was left reading g/km in both. */
   co2Unit: string
   co2PerDistance: (gramsPerKm: number | null | undefined) => number | null
-  /** Per mile needs a third decimal; per 100 km does not. */
+  /** Both sides quote per hundred, so both need the same two decimals. */
   costDigits: number
 
   /** Form helpers: what the user typed -> km for storage, and back. */
@@ -75,8 +85,13 @@ export function makeUnits(system: UnitSystem): Units {
   return {
     system,
     distanceUnit: imperial ? 'mi' : 'km',
-    efficiencyUnit: imperial ? 'mi/kWh' : 'kWh/100km',
+    // Per hundred leads on both sides, so the headline figure means the same
+    // thing whichever system is chosen, and the familiar inverted form sits
+    // beside it rather than replacing it.
+    efficiencyUnit: imperial ? 'kWh/100mi' : 'kWh/100km',
+    efficiencyAltUnit: imperial ? 'mi/kWh' : 'km/kWh',
     consumptionUnit: imperial ? 'mpg' : 'L/100km',
+    consumptionAltUnit: imperial ? 'L/100km' : 'mpg',
     weightUnit: imperial ? 'lb' : 'kg',
 
     distanceValue,
@@ -85,8 +100,16 @@ export function makeUnits(system: UnitSystem): Units {
 
     efficiency: v => {
       if (v == null) return '—'
-      // Note the inversion: more mi/kWh is better, less kWh/100km is better.
-      return imperial ? num(kwhPer100kmToMilesPerKwh(v), 2) : num(v, 2)
+      // Energy per hundred of whichever distance unit is on display.
+      return num(imperial ? v * KM_PER_MILE : v, 2)
+    },
+
+    efficiencyAlt: v => {
+      if (v == null) return '—'
+      // The inversion: more distance per kWh is better, less kWh per hundred
+      // is better. Same measurement, opposite direction.
+      const perKwh = imperial ? kwhPer100kmToMilesPerKwh(v) : 100 / v
+      return num(perKwh, 2)
     },
 
     consumption: v => {
@@ -94,26 +117,33 @@ export function makeUnits(system: UnitSystem): Units {
       return imperial ? num(lPer100kmToMpg(v), 1) : num(v, 1)
     },
 
+    consumptionAlt: v => {
+      if (v == null) return '—'
+      return imperial ? num(v, 1) : num(lPer100kmToMpg(v), 1)
+    },
+
     weight: kg => (kg == null ? '—' : `${num(imperial ? kgToLb(kg) : kg, 0)} ${imperial ? 'lb' : 'kg'}`),
 
-    costUnit: imperial ? '/mi' : '/100km',
+    costUnit: imperial ? '/100mi' : '/100km',
     co2Unit: imperial ? 'g/mi' : 'g/km',
     co2PerDistance: gramsPerKm =>
       gramsPerKm == null ? null : imperial ? gramsPerKm * KM_PER_MILE : gramsPerKm,
-    costDigits: imperial ? 3 : 2,
+    costDigits: 2,
 
+    // Per hundred on both sides. Per single mile made the figure a fraction of
+    // a currency unit — EUR 0.043 rather than EUR 4.32 — which is technically
+    // right and useless to read, and not comparable with the metric one at a
+    // glance either.
     costPerDistanceAmount: costPer100km => {
       if (costPer100km == null) return null
-      return imperial ? costPer100km / kmToMiles(100) : costPer100km
+      return imperial ? costPer100km * KM_PER_MILE : costPer100km
     },
 
     costPerDistance: (costPer100km, money) => {
       if (costPer100km == null) return '—'
-      // Per 100 km reads oddly in imperial; per mile is the familiar figure.
-      const value = imperial ? costPer100km / kmToMiles(100) : costPer100km
-      const digits = imperial ? 3 : 2
-      const shown = money ? money(value, digits) : `€${num(value, digits)}`
-      return `${shown}${imperial ? '/mi' : '/100km'}`
+      const value = imperial ? costPer100km * KM_PER_MILE : costPer100km
+      const shown = money ? money(value, 2) : `€${num(value, 2)}`
+      return `${shown}${imperial ? '/100mi' : '/100km'}`
     },
 
     toKm: entered => (imperial ? milesToKm(entered) : entered),

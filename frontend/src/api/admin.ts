@@ -63,6 +63,10 @@ export const getOverview = () => api.get<AdminOverview>('/admin/overview').then(
 export const runTask = (key: string, params?: Record<string, unknown>) =>
   api.post<ImportRun>(`/admin/tasks/${key}/run`, params ?? {}).then(r => r.data)
 
+/** Everything, in the order the sources depend on each other. */
+export const runAll = () =>
+  api.post<{ started: string[] }>('/admin/tasks/run-all', {}).then(r => r.data)
+
 export const getRuns = (limit = 25) =>
   api.get<ImportRun[]>('/admin/runs', { params: { limit } }).then(r => r.data)
 

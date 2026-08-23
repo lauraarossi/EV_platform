@@ -134,6 +134,13 @@ TASKS: dict[str, Task] = {
 }
 
 
+# The order a full refresh runs in, and it is not arbitrary: merge fills EV
+# detail on EEA rows from evdb, so both must be in first, and rekey regroups
+# whatever ended up in the catalogue, so it goes last. Prices are independent
+# and ride along at the end.
+SEQUENCE = ["evdb", "eea", "vca", "merge", "rekey", "fx", "oil-bulletin"]
+
+
 def _now() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
 
@@ -164,6 +171,44 @@ def start(db: Session, task_key: str, user: User | None) -> ImportRun:
     db.commit()
     db.refresh(run)
     return run
+
+
+def run_sequence(
+    task_keys: list[str] | None = None,
+    params: dict | None = None,
+    triggered_by_id: int | None = None,
+    session_factory: Callable[[], Any] | None = None,
+) -> None:
+    """Run several refreshes back to back, each recorded separately.
+
+    One run record per task rather than one for the batch: a full refresh that
+    got three sources in and failed on the fourth is a useful thing to be able
+    to read, and a single row saying "failed" would throw the other three away.
+
+    A failure does not stop the rest. The sources are independent, and the two
+    that are not — merge and rekey — are better run over whatever did arrive
+    than skipped because something unrelated was down.
+    """
+    if session_factory is None:
+        from app.db.session import SessionLocal
+
+        session_factory = SessionLocal
+
+    for key in task_keys or SEQUENCE:
+        if key not in TASKS:
+            log.warning("Skipping unknown refresh %r", key)
+            continue
+        with session_factory() as db:
+            run = ImportRun(
+                task=key,
+                status=ImportStatus.running,
+                started_at=_now(),
+                triggered_by_id=triggered_by_id,
+            )
+            db.add(run)
+            db.commit()
+            run_id = run.id
+        execute(run_id, key, params, session_factory=session_factory)
 
 
 def execute(

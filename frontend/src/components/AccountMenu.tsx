@@ -8,6 +8,7 @@ export default function AccountMenu() {
   const { user, signOut } = useAuth()
   const { units, setSystem } = useUnits()
   const { code, choices, choose } = useCurrency()
+  const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const wrap = useRef<HTMLDivElement>(null)
@@ -15,13 +16,17 @@ export default function AccountMenu() {
   useEffect(() => {
     if (!open) return
     const onDown = (e: MouseEvent) => {
+      // Deliberately `click`, not `mousedown`: choosing from a native select
+      // raises no click on the page, where a mousedown at the popup's position
+      // reads as a click outside — which closed this menu, unmounted the
+      // select, and lost the change before it happened.
       if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false)
     }
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
-    document.addEventListener('mousedown', onDown)
+    document.addEventListener('click', onDown)
     document.addEventListener('keydown', onKey)
     return () => {
-      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('click', onDown)
       document.removeEventListener('keydown', onKey)
     }
   }, [open])
@@ -95,7 +100,12 @@ export default function AccountMenu() {
             <p className="text-[10px] uppercase tracking-wider text-ink-3">Currency</p>
             <select
               value={code}
-              onChange={e => { void choose(e.target.value) }}
+              onChange={e => {
+                setError(null)
+                choose(e.target.value).catch(() =>
+                  setError('Could not switch currency just now.'),
+                )
+              }}
               aria-label="Currency"
               // Opaque, not transparent: the popup list is drawn by the
               // browser, and against a transparent control it came out white
@@ -108,6 +118,11 @@ export default function AccountMenu() {
                 </option>
               ))}
             </select>
+            {error && (
+              <p className="mt-1.5 text-[11px]" style={{ color: 'var(--critical)' }}>
+                {error}
+              </p>
+            )}
           </div>
 
           <div className="my-1 h-px bg-edge" />

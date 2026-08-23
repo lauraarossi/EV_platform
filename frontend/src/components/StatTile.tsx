@@ -9,12 +9,15 @@ export default function StatTile({
   label,
   value,
   unit,
+  alt,
   hint,
   accent = 'var(--accent)',
 }: {
   label: string
   value: string
   unit?: string
+  /** The same quantity said another way, under the headline figure. */
+  alt?: string
   hint?: string
   accent?: string
 }) {
@@ -38,6 +41,7 @@ export default function StatTile({
         {unit && <span className="shrink-0 text-sm font-medium text-ink-3">{unit}</span>}
       </div>
 
+      {alt && <p className="readout mt-1 text-xs text-ink-2">{alt}</p>}
       {hint && <p className="mt-1.5 text-xs text-ink-3">{hint}</p>}
     </GlassCard>
   )
