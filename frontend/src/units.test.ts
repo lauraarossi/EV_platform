@@ -51,7 +51,8 @@ describe('formatting', () => {
   it('shows cost per mile rather than per 100 miles', () => {
     const u = makeUnits('imperial')
     // €4.17/100km is about €0.067/mi
-    expect(u.costPerDistance(4.17)).toBe('€0.067/mi')
+    // Per hundred on both sides: EUR 0.067/mi was right and unreadable.
+    expect(u.costPerDistance(4.17)).toBe('€6.71/100mi')
     expect(makeUnits('metric').costPerDistance(4.17)).toBe('€4.17/100km')
   })
 
@@ -70,9 +71,10 @@ describe('cost per distance in a stat tile', () => {
     expect(metric.costUnit).toBe('/100km')
     expect(metric.costDigits).toBe(2)
 
+    // A mile is further than a kilometre, so a hundred of them cost more.
     const imperial = makeUnits('imperial')
-    expect(imperial.costPerDistanceAmount(4.17)).toBeCloseTo(0.0671, 4)
-    expect(imperial.costUnit).toBe('/mi')
+    expect(imperial.costPerDistanceAmount(4.17)).toBeCloseTo(6.71, 2)
+    expect(imperial.costUnit).toBe('/100mi')
     expect(imperial.costDigits).toBe(3)
   })
 
