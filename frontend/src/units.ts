@@ -35,6 +35,14 @@ export interface Units {
   distanceUnit: string
   efficiencyUnit: string
   consumptionUnit: string
+  /** The same figure the other way round, shown alongside.
+   *
+   *  Energy per distance and distance per energy are both in use, they point
+   *  in opposite directions — less is better, then more is better — and which
+   *  one a person reads fluently depends entirely on where they learned to
+   *  drive. Cheaper to print both than to make anyone convert in their head. */
+  efficiencyAltUnit: string
+  consumptionAltUnit: string
   weightUnit: string
 
   distance: (km: number | null | undefined, digits?: number) => string
@@ -42,6 +50,8 @@ export interface Units {
   distanceValue: (km: number | null | undefined, digits?: number) => string
   efficiency: (kwhPer100km: number | null | undefined) => string
   consumption: (lPer100km: number | null | undefined) => string
+  efficiencyAlt: (kwhPer100km: number | null | undefined) => string
+  consumptionAlt: (lPer100km: number | null | undefined) => string
   weight: (kg: number | null | undefined) => string
   costPerDistance: (
     costPer100km: number | null | undefined,
@@ -75,8 +85,13 @@ export function makeUnits(system: UnitSystem): Units {
   return {
     system,
     distanceUnit: imperial ? 'mi' : 'km',
-    efficiencyUnit: imperial ? 'mi/kWh' : 'kWh/100km',
+    // Per hundred leads on both sides, so the headline figure means the same
+    // thing whichever system is chosen, and the familiar inverted form sits
+    // beside it rather than replacing it.
+    efficiencyUnit: imperial ? 'kWh/100mi' : 'kWh/100km',
+    efficiencyAltUnit: imperial ? 'mi/kWh' : 'km/kWh',
     consumptionUnit: imperial ? 'mpg' : 'L/100km',
+    consumptionAltUnit: imperial ? 'L/100km' : 'mpg',
     weightUnit: imperial ? 'lb' : 'kg',
 
     distanceValue,
@@ -85,13 +100,26 @@ export function makeUnits(system: UnitSystem): Units {
 
     efficiency: v => {
       if (v == null) return '—'
-      // Note the inversion: more mi/kWh is better, less kWh/100km is better.
-      return imperial ? num(kwhPer100kmToMilesPerKwh(v), 2) : num(v, 2)
+      // Energy per hundred of whichever distance unit is on display.
+      return num(imperial ? v * KM_PER_MILE : v, 2)
+    },
+
+    efficiencyAlt: v => {
+      if (v == null) return '—'
+      // The inversion: more distance per kWh is better, less kWh per hundred
+      // is better. Same measurement, opposite direction.
+      const perKwh = imperial ? kwhPer100kmToMilesPerKwh(v) : 100 / v
+      return num(perKwh, 2)
     },
 
     consumption: v => {
       if (v == null) return '—'
       return imperial ? num(lPer100kmToMpg(v), 1) : num(v, 1)
+    },
+
+    consumptionAlt: v => {
+      if (v == null) return '—'
+      return imperial ? num(v, 1) : num(lPer100kmToMpg(v), 1)
     },
 
     weight: kg => (kg == null ? '—' : `${num(imperial ? kgToLb(kg) : kg, 0)} ${imperial ? 'lb' : 'kg'}`),

@@ -37,7 +37,9 @@ export default function Compare() {
   // Adjustments, kept out of the way: the default answer is the honest one,
   // and these only matter once someone wants to argue with it.
   const [weight, setWeight] = useState(0)
-  const [applyGap, setApplyGap] = useState(true)
+  const [applyGap, setApplyGap] = useState(false)
+  // Kept in state rather than left to the DOM, so refetching cannot close it.
+  const [adjustmentsOpen, setAdjustmentsOpen] = useState(false)
   const settledWeight = useDebounced(weight, 250)
 
   // Null means "use the first car's logged history". A number is a distance
@@ -84,7 +86,7 @@ export default function Compare() {
     return { candidates, selectedMine, selectedOther, comparison, failure, loggedKm }
   }, [mineId, otherId, settledWeight, settledDistance, applyGap, units.system])
 
-  if (loading) return <Loading label="Pricing your driving both ways…" />
+  if (loading && !data) return <Loading label="Pricing your driving both ways…" />
   if (error) return <ErrorState message={error} onRetry={reload} />
   if (!data) return null
 
@@ -120,10 +122,10 @@ export default function Compare() {
 
   const adjustmentSummary =
     weight === 0
-      ? 'both cars on their entered figures'
-      : `${yourName} at ${comparison?.your_basis ?? '—'} ${comparison?.basis_label ?? ''}` +
+      ? 'both cars on the figures entered for them'
+      : `${yourName} judged on ${comparison?.your_basis ?? '—'} ${comparison?.basis_label ?? ''}` +
         (comparison?.gap_applied && gapPct != null
-          ? `, ${theirName} lifted ${gapPct > 0 ? '+' : ''}${gapPct}%`
+          ? `, ${theirName} moved ${gapPct > 0 ? '+' : ''}${gapPct}% to match`
           : `, ${theirName} as entered`)
 
   const pickers = (
@@ -177,21 +179,24 @@ export default function Compare() {
       </div>
 
       {comparison?.your_basis_measured != null && (
-        <details className="mt-3 border-t border-edge pt-3">
+        <details
+          open={adjustmentsOpen}
+          onToggle={e => setAdjustmentsOpen((e.currentTarget as HTMLDetailsElement).open)}
+          className="mt-3 border-t border-edge pt-3"
+        >
           <summary className="focus-ring cursor-pointer list-none text-xs text-ink-3 hover:text-ink-2">
             <span className="mr-1.5">⚙</span>
             Adjustments — <span className="text-ink-2">{adjustmentSummary}</span>
           </summary>
 
           <div className="mt-3 rounded-xl border border-edge p-3">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <label htmlFor="basis" className="text-xs text-ink-2">
-                {yourName}’s consumption
-              </label>
-              <span className="readout text-sm font-medium text-ink">
-                {comparison.your_basis} {comparison.basis_label}
-              </span>
-            </div>
+            <label htmlFor="basis" className="text-xs text-ink-2">
+              Judge {yourName} on
+            </label>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-ink-3">
+              Both cars are costed from the consumption figure held for them. This slides{' '}
+              {yourName} from that figure towards what your log actually shows it doing.
+            </p>
 
             <input
               id="basis"
@@ -200,12 +205,21 @@ export default function Compare() {
               onChange={e => setWeight(Number(e.target.value) / 100)}
               className="focus-ring mt-2 w-full accent-[var(--accent)]"
             />
-            <div className="flex justify-between text-[11px] text-ink-3">
-              <button type="button" onClick={() => setWeight(0)} className="focus-ring rounded px-1 hover:text-ink">
-                entered {comparison.your_basis_quoted}
+            <div className="flex justify-between gap-2 text-[11px] text-ink-3">
+              <button type="button" onClick={() => setWeight(0)} className="focus-ring rounded px-1 text-left hover:text-ink">
+                the figure entered
+                <span className="readout block text-ink-2">
+                  {comparison.your_basis_quoted} {comparison.basis_label}
+                </span>
               </button>
-              <button type="button" onClick={() => setWeight(1)} className="focus-ring rounded px-1 hover:text-ink">
-                measured {comparison.your_basis_measured}
+              <span className="readout self-center text-sm font-medium text-ink">
+                {comparison.your_basis}
+              </span>
+              <button type="button" onClick={() => setWeight(1)} className="focus-ring rounded px-1 text-right hover:text-ink">
+                what it actually does
+                <span className="readout block text-ink-2">
+                  {comparison.your_basis_measured} {comparison.basis_label}
+                </span>
               </button>
             </div>
 
@@ -214,14 +228,17 @@ export default function Compare() {
                 type="checkbox"
                 checked={applyGap}
                 onChange={e => setApplyGap(e.target.checked)}
-                className="focus-ring mt-0.5 h-3.5 w-3.5 rounded border-edge"
+                disabled={weight === 0}
+                className="focus-ring mt-0.5 h-3.5 w-3.5 rounded border-edge disabled:opacity-40"
               />
-              <span className="text-ink-2">
-                Apply the same gap to {theirName}
+              <span className={weight === 0 ? 'text-ink-3' : 'text-ink-2'}>
+                Adjust {theirName} by the same amount
                 <span className="block text-ink-3">
-                  {gapPct != null
-                    ? `Your driving runs ${gapPct > 0 ? gapPct + '% above' : Math.abs(gapPct) + '% below'} the brochure. Lifting both keeps them comparable; leaving it off flatters ${theirName}, which is still on its test figure.`
-                    : 'Keeps both cars on the same footing once the slider moves.'}
+                  {weight === 0
+                    ? 'Nothing to pass on while the slider is at the entered figure.'
+                    : gapPct != null
+                      ? `You are ${Math.abs(gapPct)}% ${gapPct > 0 ? 'above' : 'below'} what ${yourName} is quoted at. On, ${theirName} moves by the same ${Math.abs(gapPct)}% and the two stay comparable. Off, your real driving is measured against ${theirName}'s quoted figure, which flatters it.`
+                      : 'Moves the other car by the same proportion, so the two stay comparable.'}
                 </span>
               </span>
             </label>
@@ -298,13 +315,13 @@ export default function Compare() {
           accent="var(--series-2)"
         />
         <StatTile
-          label={units.system === 'imperial' ? 'First per mile' : 'First per 100km'}
+          label={`${yourName}, per distance`}
           unit={units.costUnit}
           value={money.format(units.costPerDistanceAmount(comparison.actual_cost_per_100km), units.costDigits)}
           accent="var(--accent-3)"
         />
         <StatTile
-          label={units.system === 'imperial' ? 'Second per mile' : 'Second per 100km'}
+          label={`${theirName}, per distance`}
           unit={units.costUnit}
           value={money.format(units.costPerDistanceAmount(comparison.alternative_cost_per_100km), units.costDigits)}
           accent="var(--series-2)"

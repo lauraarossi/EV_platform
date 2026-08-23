@@ -90,6 +90,20 @@ def compare_vehicles(
     # it weighs what the car actually achieves against what it is quoted at.
     alternative = owned_vehicle(db, user, comparison_vehicle_id)
 
+    # What the other car pays, if it is one of yours with something logged. A
+    # Showroom car has no history and falls through to the market.
+    other_events = (
+        events
+        if alternative.id == vehicle.id
+        else db.query(FuelEvent).filter(FuelEvent.vehicle_id == alternative.id).all()
+    )
+    other = metrics.summarise(other_events, alternative)
+    alternative_unit_price = (
+        other.avg_price_per_kwh
+        if alternative.fuel_type == FuelType.electric
+        else other.avg_price_per_litre
+    )
+
     logged, _ = metrics.build_intervals(events, vehicle)
 
     if distance_km is not None:
@@ -133,6 +147,7 @@ def compare_vehicles(
             measured_consumption=measured,
             measured_weight=measured_weight,
             driven_unit_price=driven_unit_price,
+            alternative_unit_price=alternative_unit_price,
             apply_gap_to_alternative=apply_gap_to_alternative,
             fallback_price_per_litre=fallback_price_per_litre,
             fallback_price_per_kwh=fallback_price_per_kwh,
