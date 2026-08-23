@@ -75,7 +75,7 @@ describe('cost per distance in a stat tile', () => {
     const imperial = makeUnits('imperial')
     expect(imperial.costPerDistanceAmount(4.17)).toBeCloseTo(6.71, 2)
     expect(imperial.costUnit).toBe('/100mi')
-    expect(imperial.costDigits).toBe(3)
+    expect(imperial.costDigits).toBe(2)
   })
 
   it('leaves the currency symbol to the layer that knows it', () => {

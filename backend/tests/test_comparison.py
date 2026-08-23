@@ -548,3 +548,55 @@ def test_the_same_holds_when_the_showroom_car_is_the_electric_one(db):
                                 ev, driven_vehicle=mine)
     assert result.actual_cost == pytest.approx(108.0)
     assert result.alternative_cost == pytest.approx(45.0)
+
+
+# --- pricing a distance nobody drove ------------------------------------------
+
+def test_the_driven_car_is_priced_from_what_it_has_been_paying(db):
+    """Over a chosen distance there are no receipts. Falling through to a
+    tariff that does not exist priced an EV at nothing, so the comparison said
+    it cost zero to run."""
+    user = ensure_user(db)
+    add_price(db, D(2026, 6, 1), 1.80)
+    ev = car(db, make="Renault", model="R4", fuel_type=FuelType.electric,
+             consumption_kwh_per_100km=16.0)
+    petrol_car = petrol(db, 6.0)
+
+    # No electricity tariff on the account at all — the case that broke.
+    result = comparison.compare(
+        db, user.id, comparison.over_distance(1000, D(2026, 6, 15)), petrol_car,
+        driven_vehicle=ev, driven_unit_price=0.28,
+    )
+
+    assert result.actual_cost == pytest.approx(44.80)     # 160 kWh at 0.28
+    assert result.alternative_cost == pytest.approx(108.0)  # 60 L at 1.80
+    assert result.saving == pytest.approx(63.20)
+
+
+def test_that_average_is_marked_an_estimate(db):
+    """It is real money, but it is an average rather than the receipt for this
+    stretch, so it should not claim to be exact."""
+    user = ensure_user(db)
+    mine = petrol(db, 6.0)
+    theirs = petrol(db, 6.0)
+
+    result = comparison.compare(
+        db, user.id, comparison.over_distance(1000), theirs,
+        driven_vehicle=mine, driven_unit_price=1.90,
+    )
+    assert result.intervals[0].unit_price == pytest.approx(1.90)
+    assert result.intervals[0].price_is_estimate is True
+
+
+def test_a_real_receipt_still_wins_over_the_average(db):
+    """On a logged interval the price for that stretch is known exactly, and
+    the average must not displace it."""
+    mine = petrol(db, 6.0)
+    theirs = petrol(db, 6.0)
+
+    result = comparison.compare(db, ensure_user(db).id, [
+        FakeInterval("2026-06-01", "2026-06-20", 1000.0, cost=90.0, litres_added=45.0),
+    ], theirs, driven_vehicle=mine, driven_unit_price=1.10)
+
+    assert result.intervals[0].unit_price == pytest.approx(2.00)   # 90 / 45
+    assert result.intervals[0].price_is_estimate is False
