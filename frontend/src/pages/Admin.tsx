@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  getOverview, getRuns, getUsers, runAll, runTask, setUserRole, uploadVca,
+  abandonRun, getOverview, getRuns, getUsers, runAll, runTask, setUserRole, uploadVca,
   type AdminOverview, type AdminUser, type ImportRun, type UserRole,
 } from '../api/admin'
 import { getFeedback, setFeedbackStatus, type Feedback, type FeedbackStatus } from '../api/feedback'
@@ -99,6 +99,23 @@ export default function Admin() {
       setNotice(e?.response?.data?.detail ?? `Could not start ${label}.`)
     } finally {
       setBusy(null)
+    }
+  }
+
+  const giveUp = async (run: ImportRun) => {
+    if (
+      !window.confirm(
+        `Give up on ${run.task}? This does not stop it — nothing can — it stops the ` +
+          'record blocking further runs of that task.',
+      )
+    )
+      return
+    setNotice(null)
+    try {
+      await abandonRun(run.id)
+      await load()
+    } catch (e: any) {
+      setNotice(e?.response?.data?.detail ?? 'Could not clear that run.')
     }
   }
 
@@ -250,6 +267,16 @@ export default function Admin() {
                       />
                     </label>
                   )}
+                  {running && task.last_run && (
+                    <button
+                      type="button"
+                      onClick={() => giveUp(task.last_run!)}
+                      className="focus-ring rounded-lg border border-edge px-3 py-1.5 text-xs font-medium text-ink-3 hover:text-ink"
+                      title="Stop treating this run as in progress"
+                    >
+                      Give up
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => start(task.key, task.label, task.slow)}
@@ -342,7 +369,18 @@ export default function Admin() {
               {runs.map(run => (
                 <tr key={run.id} className="border-t border-edge align-top">
                   <td className="px-4 py-3 text-ink">{run.task}</td>
-                  <td className="px-4 py-3"><RunStatus status={run.status} /></td>
+                  <td className="px-4 py-3">
+                    <RunStatus status={run.status} />
+                    {run.status === 'running' && (
+                      <button
+                        type="button"
+                        onClick={() => giveUp(run)}
+                        className="focus-ring ml-2 rounded px-1 text-[11px] text-ink-3 underline decoration-dotted hover:text-ink"
+                      >
+                        give up
+                      </button>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-ink-2">{when(run.started_at)}</td>
                   <td className="readout px-4 py-3 text-right text-ink-2">
                     {took(run.duration_ms)}

@@ -216,11 +216,31 @@ python -m app.cli refresh --only fx    # just the exchange rates
 python -m app.cli refresh --list       # what there is to run
 ```
 
-Set it up under the service's **Settings → Cron Schedule**, with a standard
-cron expression — `0 3 * * 2` for 03:00 each Tuesday. Scheduled runs record
-themselves exactly as hand-started ones do, so the history in the console reads
-the same either way and a schedule that has silently stopped working is
-visible.
+It needs a **service of its own**. Railway runs the service's start command on
+the schedule, and the web service's command never exits by design, so the two
+cannot share one. On that second service:
+
+| | |
+|---|---|
+| Start command | `python -m app.cli refresh` |
+| Cron schedule | `0 3 * * *` |
+| Healthcheck path | **cleared** |
+| Restart policy | **Never** |
+
+The last two matter. `railway.json` sets a healthcheck and an on-failure restart
+for the web service, and Railway applies that file to every service built from
+this repo — so a cron job, which has no web server and is supposed to exit, gets
+marked unhealthy and retried. Override both in that service's settings.
+
+The job waits up to three minutes for the database before giving up. Railway's
+serverless Postgres sleeps when idle and boots on the first connection, which is
+exactly the state a 3am job finds it in; without the wait it dies on
+`FATAL: the database system is starting up` for a condition that clears itself
+in seconds.
+
+Scheduled runs record themselves exactly as hand-started ones do, so the history
+in the console reads the same either way and a schedule that has silently
+stopped working is visible.
 
 ---
 

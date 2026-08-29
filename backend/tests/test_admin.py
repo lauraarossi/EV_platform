@@ -401,6 +401,7 @@ def test_the_scheduled_command_runs_the_same_sequence(monkeypatch):
     from app import cli
 
     called = {}
+    monkeypatch.setattr(cli, "wait_for_database", lambda *a, **k: True)
     monkeypatch.setattr(admin_tasks, "run_sequence", lambda keys: called.setdefault("keys", keys))
     assert cli.main(["refresh"]) == 0
     assert called["keys"] == admin_tasks.SEQUENCE
@@ -410,6 +411,7 @@ def test_the_command_can_be_pointed_at_one_task(monkeypatch):
     from app import cli
 
     called = {}
+    monkeypatch.setattr(cli, "wait_for_database", lambda *a, **k: True)
     monkeypatch.setattr(admin_tasks, "run_sequence", lambda keys: called.setdefault("keys", keys))
     assert cli.main(["refresh", "--only", "fx"]) == 0
     assert called["keys"] == ["fx"]
@@ -420,3 +422,140 @@ def test_the_command_refuses_a_task_that_does_not_exist(monkeypatch, capsys):
 
     assert cli.main(["refresh", "--only", "nonsense"]) == 2
     assert "Unknown task" in capsys.readouterr().err
+
+
+# --- runs whose process went away ---------------------------------------------
+
+def stuck_run(db, task="oil-bulletin", hours_ago=48):
+    import datetime as dt
+
+    run = ImportRun(
+        task=task,
+        status=ImportStatus.running,
+        started_at=dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=hours_ago),
+    )
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+    return run
+
+
+def test_a_run_left_behind_by_a_dead_process_is_closed_out(db):
+    """A background task lives in the web process; a deploy or a crash takes it
+    with them and nothing is left to write the ending."""
+    run = stuck_run(db)
+    assert admin_tasks.sweep_abandoned(db) == 1
+
+    db.refresh(run)
+    assert run.status == ImportStatus.failed
+    assert "Abandoned" in run.error
+    assert run.finished_at is not None
+
+
+def test_a_run_that_started_recently_is_left_alone(db):
+    """Two hours is the line, and a slow EEA import is well inside it."""
+    run = stuck_run(db, hours_ago=1)
+    assert admin_tasks.sweep_abandoned(db) == 0
+
+    db.refresh(run)
+    assert run.status == ImportStatus.running
+
+
+def test_a_stuck_run_stops_blocking_the_task(client, signed_in, db, monkeypatch):
+    """The bug this fixes: one abandoned row refused every later attempt at
+    that task, and Run all with it."""
+    make_admin(db)
+    monkeypatch.setattr(admin_tasks, "execute", lambda *a, **k: None)
+    stuck_run(db, task="rekey")
+
+    assert client.post("/api/v1/admin/tasks/rekey/run").status_code == 202
+
+
+def test_run_all_is_not_blocked_by_an_abandoned_run(client, signed_in, db, monkeypatch):
+    make_admin(db)
+    monkeypatch.setattr(admin_tasks, "run_sequence", lambda *a, **k: None)
+    stuck_run(db)
+
+    assert client.post("/api/v1/admin/tasks/run-all").status_code == 202
+
+
+def test_a_stuck_run_can_be_given_up_on_by_hand(client, signed_in, db):
+    """Before the two hours are up, when you know it is not coming back."""
+    make_admin(db)
+    run = stuck_run(db, hours_ago=0)
+
+    r = client.post(f"/api/v1/admin/runs/{run.id}/abandon")
+    assert r.status_code == 200 and r.json()["status"] == "failed"
+    assert "Given up on" in r.json()["error"]
+
+
+def test_giving_up_on_a_finished_run_is_refused(client, signed_in, db):
+    make_admin(db)
+    run = admin_tasks.start(db, "rekey", None)
+    admin_tasks.execute(run.id, "rekey", session_factory=lambda: _NoCloseSession(db))
+
+    assert client.post(f"/api/v1/admin/runs/{run.id}/abandon").status_code == 409
+
+
+def test_giving_up_needs_the_admin_role(client, signed_in, db):
+    run = stuck_run(db)
+    assert client.post(f"/api/v1/admin/runs/{run.id}/abandon").status_code == 403
+
+
+def test_the_console_sweeps_before_it_reports(client, signed_in, db):
+    """So what it shows is already true, rather than true after a refresh."""
+    make_admin(db)
+    run = stuck_run(db)
+
+    client.get("/api/v1/admin/overview")
+    db.refresh(run)
+    assert run.status == ImportStatus.failed
+
+
+def test_the_command_waits_for_the_database_rather_than_crashing(monkeypatch):
+    """Postgres refuses connections while it boots, and a scheduled container
+    starts independently of it. Without the wait the job simply died at 3am
+    for a condition that clears itself in seconds."""
+    from app import cli
+
+    attempts = {"n": 0}
+
+    class Boot:
+        def __enter__(self):
+            attempts["n"] += 1
+            if attempts["n"] < 3:
+                raise RuntimeError("the database system is starting up")
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def execute(self, *a):
+            return None
+
+    monkeypatch.setattr("app.db.session.SessionLocal", lambda: Boot())
+    monkeypatch.setattr(cli.time, "sleep", lambda s: None)
+
+    assert cli.wait_for_database(timeout=30) is True
+    assert attempts["n"] == 3
+
+
+def test_the_command_gives_up_if_the_database_never_comes_back(monkeypatch):
+    """A wait that never ends is a container that never exits, which Railway
+    would then skip the next run of."""
+    from app import cli
+
+    class Down:
+        def __enter__(self):
+            raise RuntimeError("no route to host")
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr("app.db.session.SessionLocal", lambda: Down())
+    monkeypatch.setattr(cli.time, "sleep", lambda s: None)
+    # The deadline is wall clock, so the default would spin here for real.
+    monkeypatch.setattr(cli, "DB_WAIT_SECONDS", 0)
+
+    assert cli.wait_for_database(timeout=0) is False
+    assert cli.main(["refresh"]) == 1

@@ -17,6 +17,7 @@ import datetime
 import logging
 from typing import Any, Callable
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.import_run import ImportRun, ImportStatus
@@ -139,6 +140,40 @@ TASKS: dict[str, Task] = {
 # whatever ended up in the catalogue, so it goes last. Prices are independent
 # and ride along at the end.
 SEQUENCE = ["evdb", "eea", "vca", "merge", "rekey", "fx", "oil-bulletin"]
+
+
+# Nothing here takes hours. A run still marked running after this did not
+# finish — the process carrying it stopped, and nothing was left to write the
+# ending. Without a sweep the row blocks that task forever.
+STALE_AFTER = datetime.timedelta(hours=2)
+
+
+def sweep_abandoned(db: Session) -> int:
+    """Close out runs whose process is plainly gone.
+
+    A background task lives in the web process. A deploy, a restart or a crash
+    takes it with them, and the row it was writing stays `running` with nobody
+    left to finish it — which then refuses every later attempt at that task as
+    "already running". Recorded as failed rather than deleted: it did start,
+    and something did stop it.
+    """
+    cutoff = _now() - STALE_AFTER
+    stale = db.scalars(
+        select(ImportRun).where(
+            ImportRun.status == ImportStatus.running, ImportRun.started_at < cutoff
+        )
+    ).all()
+    for run in stale:
+        run.status = ImportStatus.failed
+        run.error = (
+            "Abandoned — still marked running after "
+            f"{int(STALE_AFTER.total_seconds() // 3600)}h, so the process carrying "
+            "it stopped without recording an ending."
+        )
+        run.finished_at = _now()
+    if stale:
+        db.commit()
+    return len(stale)
 
 
 def _now() -> datetime.datetime:
