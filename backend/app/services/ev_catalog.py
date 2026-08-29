@@ -28,6 +28,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.catalog import CatalogVehicle, CatalogSource
 from app.models.vehicle import FuelType, Transmission
 
@@ -50,8 +51,21 @@ class CatalogImportResult:
 
 
 def _latest_asset_url(timeout: float = 60.0) -> tuple[str, str | None]:
+    headers = {"Accept": "application/vnd.github+json"}
+    # Unauthenticated callers get 60 requests an hour per address. A shared
+    # platform address is usually spent before we ask, so a scheduled import
+    # fails on a rate limit that never appears from a laptop.
+    if settings.github_token:
+        headers["Authorization"] = f"Bearer {settings.github_token}"
+
     with httpx.Client(timeout=timeout, follow_redirects=True) as client:
-        r = client.get(RELEASE_API, headers={"Accept": "application/vnd.github+json"})
+        r = client.get(RELEASE_API, headers=headers)
+        if r.status_code == 403 and "rate limit" in r.text.lower():
+            raise RuntimeError(
+                "GitHub rate-limited this address (60 calls an hour without a "
+                "token). Set GITHUB_TOKEN to lift it to 5,000; no scopes are "
+                "needed, the repository is public."
+            )
         r.raise_for_status()
         payload = r.json()
 
