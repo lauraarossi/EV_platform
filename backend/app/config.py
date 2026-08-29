@@ -63,6 +63,13 @@ class Settings(BaseSettings):
     # current published figure for your grid.
     grid_co2_g_per_kwh: float = 250.0
 
+    # Optional. GitHub allows 60 unauthenticated API calls an hour *per
+    # address*, and a shared platform address is usually spent — which is why
+    # the evdb import fails with a 403 on Railway while working from a laptop.
+    # Any token lifts that to 5,000; it needs no scopes, since the repository
+    # is public.
+    github_token: str = ""
+
     openweather_api_key: str = ""
     fuel_price_api_key: str = ""
 

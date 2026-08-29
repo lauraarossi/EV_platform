@@ -559,3 +559,86 @@ def test_the_command_gives_up_if_the_database_never_comes_back(monkeypatch):
 
     assert cli.wait_for_database(timeout=0) is False
     assert cli.main(["refresh"]) == 1
+
+
+# --- recording a result must never be what fails ------------------------------
+
+def test_a_date_in_a_result_is_stored_rather_than_crashing(db):
+    """The oil bulletin reports the range it covered as dates, and the result
+    column is JSON. Encoding blew up while recording a *success* — after the
+    point where failures are caught — so it escaped, killed the process, and
+    left the row saying running forever."""
+    import datetime as dt
+
+    out = admin_tasks._jsonable(
+        {"latest": dt.date(2026, 8, 24), "when": dt.datetime(2026, 8, 24, 3, 0)}
+    )
+    assert out == {"latest": "2026-08-24", "when": "2026-08-24T03:00:00"}
+
+    import json
+    json.dumps(out)          # the thing that used to raise
+
+
+def test_the_real_oil_bulletin_result_serialises(db):
+    import datetime as dt
+    import json
+
+    from app.services.oil_bulletin import IngestResult
+
+    stored = admin_tasks._as_dict(
+        IngestResult(fetched_rows=900, inserted=12, updated=3, countries=["IE"],
+                     earliest=dt.date(2005, 1, 3), latest=dt.date(2026, 8, 24))
+    )
+    assert stored["latest"] == "2026-08-24"
+    json.dumps(stored)
+
+
+def test_an_unstorable_result_still_leaves_a_verdict(db, monkeypatch):
+    """Belt for the braces: whatever the payload, the run must end up marked
+    finished rather than stuck."""
+    class Unstorable:
+        def __repr__(self):
+            return "<unstorable>"
+
+    monkeypatch.setitem(
+        admin_tasks.TASKS, "rekey",
+        admin_tasks.Task("rekey", "Regroup", "", lambda db, params: {"thing": Unstorable()}),
+    )
+    run = admin_tasks.start(db, "rekey", None)
+    admin_tasks.execute(run.id, "rekey", session_factory=lambda: _NoCloseSession(db))
+
+    db.refresh(run)
+    assert run.status == ImportStatus.ok
+    assert run.finished_at is not None
+
+
+def test_a_github_rate_limit_says_what_to_do_about_it(monkeypatch):
+    """60 calls an hour per address, and a shared platform address is usually
+    spent — so this fails on Railway and never from a laptop."""
+    import httpx
+
+    from app.services import ev_catalog
+
+    class Limited:
+        status_code = 403
+        text = "API rate limit exceeded for 1.2.3.4"
+
+        def raise_for_status(self):
+            raise AssertionError("should not get this far")
+
+    class Client:
+        def __init__(self, **kw):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def get(self, *a, **kw):
+            return Limited()
+
+    monkeypatch.setattr(httpx, "Client", Client)
+    with pytest.raises(RuntimeError, match="GITHUB_TOKEN"):
+        ev_catalog._latest_asset_url()

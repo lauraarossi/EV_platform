@@ -180,17 +180,35 @@ def _now() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
 
 
+def _jsonable(value: Any) -> Any:
+    """Whatever an importer returned, in something Postgres can store.
+
+    The result column is JSON, and a dataclass field is whatever the importer
+    found convenient — the oil bulletin reports the date range it covered as
+    `datetime.date`, which json cannot encode. That raised while *recording a
+    success*, after the point where failures are caught, so the exception
+    escaped and took the process with it: the run stayed marked running, the
+    container died, and the task was refused as busy from then on.
+    """
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if isinstance(value, (datetime.date, datetime.datetime, datetime.time)):
+        return value.isoformat()
+    if isinstance(value, (list, tuple, set)):
+        # Long ones (merge reports every unmatched name) would bloat the row.
+        return [_jsonable(v) for v in list(value)[:25]]
+    if isinstance(value, dict):
+        return {str(k): _jsonable(v) for k, v in value.items()}
+    return str(value)
+
+
 def _as_dict(result: Any) -> dict | None:
     if result is None:
         return None
     if dataclasses.is_dataclass(result):
         result = dataclasses.asdict(result)
     if isinstance(result, dict):
-        # Long lists (merge reports every unmatched name) would bloat the row.
-        return {
-            k: (v[:25] if isinstance(v, list) else v)
-            for k, v in result.items()
-        }
+        return {str(k): _jsonable(v) for k, v in result.items()}
     return {"result": str(result)}
 
 
@@ -285,4 +303,20 @@ def execute(
         run.error = (error or "")[:500] or None
         run.finished_at = _now()
         run.duration_ms = int((run.finished_at - started).total_seconds() * 1000)
-        db.commit()
+        try:
+            db.commit()
+        except Exception:
+            # Writing the outcome is the one thing that must not fail: an
+            # exception here escapes into the caller, kills whatever is running
+            # the sequence, and leaves this row saying "running" forever, which
+            # then refuses the task indefinitely. Keep the verdict, drop the
+            # detail that would not serialise.
+            log.exception("Could not record the result of %r; keeping the status", task_key)
+            db.rollback()
+            run = db.get(ImportRun, run_id)
+            if run is not None:
+                run.status = status
+                run.result = {"note": "result could not be stored"}
+                run.error = (error or "")[:500] or None
+                run.finished_at = _now()
+                db.commit()
