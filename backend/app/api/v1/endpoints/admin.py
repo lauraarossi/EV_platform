@@ -48,6 +48,7 @@ router = APIRouter(
 @router.get("/overview", response_model=AdminOverview)
 def overview(db: Session = Depends(get_db)):
     """Everything the console's front page shows, in one round trip."""
+    admin_tasks.sweep_abandoned(db)
     by_source = [
         CatalogueSourceStat(
             source=source,
@@ -117,6 +118,7 @@ def overview(db: Session = Depends(get_db)):
 # --- refreshes ---------------------------------------------------------------
 
 def _already_running(db: Session, task_key: str) -> bool:
+    admin_tasks.sweep_abandoned(db)
     return db.scalars(
         select(ImportRun).where(
             ImportRun.task == task_key, ImportRun.status == ImportStatus.running
@@ -218,12 +220,39 @@ def run_everything(
     return {"started": admin_tasks.SEQUENCE}
 
 
+@router.post("/runs/{run_id}/abandon", response_model=ImportRunRead)
+def abandon_run(
+    run_id: int,
+    db: Session = Depends(get_db),
+):
+    """Give up on a run that is stuck, so it stops blocking its task.
+
+    It does not stop anything. A background task belongs to the web process
+    and there is no handle to interrupt it; what this does is stop believing
+    the record. Marked failed rather than deleted, since it did start — and if
+    the work somehow is still going, it will overwrite this when it ends.
+    """
+    run = db.get(ImportRun, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="No such run")
+    if run.status != ImportStatus.running:
+        raise HTTPException(status_code=409, detail="That run has already finished")
+
+    run.status = ImportStatus.failed
+    run.error = "Given up on from the console; it was still marked running."
+    run.finished_at = datetime.datetime.now(datetime.timezone.utc)
+    db.commit()
+    db.refresh(run)
+    return run
+
+
 @router.get("/runs", response_model=list[ImportRunRead])
 def list_runs(
     task: str | None = None,
     limit: int = Query(default=25, le=200),
     db: Session = Depends(get_db),
 ):
+    admin_tasks.sweep_abandoned(db)
     stmt = select(ImportRun).order_by(ImportRun.started_at.desc()).limit(limit)
     if task:
         stmt = stmt.where(ImportRun.task == task)

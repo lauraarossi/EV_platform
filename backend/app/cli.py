@@ -16,8 +16,52 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+import time
+
+from sqlalchemy import text
 
 from app.services import admin_tasks
+
+log = logging.getLogger(__name__)
+
+# Long enough for a sleeping database to wake. Railway's serverless Postgres
+# stops when idle and boots on the first connection, which is exactly the state
+# a job scheduled for 3am finds it in — nothing has touched it for hours. Short
+# enough that a genuinely unreachable one fails the run rather than leaving the
+# container up, which would make Railway skip the next scheduled fire.
+DB_WAIT_SECONDS = 180
+
+
+def wait_for_database(timeout: int | None = None) -> bool:
+    """Block until the database answers, or give up.
+
+    A scheduled container and the database it needs start independently, and
+    Postgres refuses connections with "the database system is starting up"
+    for the first few seconds after it wakes. Without this the job simply
+    crashes at 3am, every night, for a condition that clears itself in ten
+    seconds.
+    """
+    from app.db.session import SessionLocal
+
+    # Resolved here rather than as a default argument, which would bind the
+    # value at import and ignore anything that changed it since.
+    timeout = DB_WAIT_SECONDS if timeout is None else timeout
+    deadline = time.monotonic() + timeout
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            with SessionLocal() as db:
+                db.execute(text("SELECT 1"))
+            if attempt > 1:
+                log.info("Database ready after %d attempts", attempt)
+            return True
+        except Exception as exc:
+            if time.monotonic() >= deadline:
+                log.error("Database still unreachable after %ds: %s", timeout, exc)
+                return False
+            # Backing off rather than hammering: it is booting, not broken.
+            time.sleep(min(2 * attempt, 10))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -54,6 +98,9 @@ def main(argv: list[str] | None = None) -> int:
         if unknown:
             print(f"Unknown task(s): {', '.join(unknown)}", file=sys.stderr)
             return 2
+
+        if not wait_for_database():
+            return 1
 
         # Runs are recorded exactly as they are from the console, so a
         # scheduled refresh and a hand-started one read the same in the history.

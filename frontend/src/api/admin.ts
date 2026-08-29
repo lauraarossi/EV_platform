@@ -84,6 +84,16 @@ export const uploadVca = (file: File) =>
     })
     .then(r => r.data)
 
+/**
+ * Give up on a run that is stuck.
+ *
+ * It stops nothing — a background task belongs to the web process and there is
+ * no handle to interrupt it. What it does is stop believing the record, so the
+ * task is no longer refused as already running.
+ */
+export const abandonRun = (id: number) =>
+  api.post<ImportRun>(`/admin/runs/${id}/abandon`, {}).then(r => r.data)
+
 export const getUsers = () => api.get<AdminUser[]>('/admin/users').then(r => r.data)
 
 export const setUserRole = (id: number, role: UserRole) =>
