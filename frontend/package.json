@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && npm run prerender",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prerender": "vite build --ssr src/entry-prerender.tsx --outDir dist-ssr --logLevel warn && node scripts/prerender.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

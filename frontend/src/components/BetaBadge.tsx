@@ -42,7 +42,7 @@ export function BetaNotice({ className = '' }: { className?: string }) {
         </button>
         {' — it is the fastest way to change what gets built next.'}
       </p>
-      <FeedbackModal open={open} onClose={() => setOpen(false)} />
+      {open && <FeedbackModal open onClose={() => setOpen(false)} />}
     </>
   )
 }

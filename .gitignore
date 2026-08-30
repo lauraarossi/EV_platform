@@ -31,3 +31,6 @@ backend/alembic/versions/__pycache__/
 
 # local dev server logs/pids
 .dev-logs/
+
+# Intermediate bundle for the landing-page prerender.
+frontend/dist-ssr/
