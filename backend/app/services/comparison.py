@@ -21,13 +21,62 @@ from app.models.fuel_price import FuelKind
 from app.models.vehicle import FuelType, Vehicle
 from app.services import emissions, fuel_pricing, tariffs
 
-# Which pump price a car actually buys. A hybrid burns petrol unless it is
-# specifically a diesel one, which the fuel type does not distinguish.
+# Which pump price a car buys. A self-charging hybrid buys petrol for every
+# kilometre it travels, so it belongs here beside the petrol cars; a diesel
+# one is recorded as diesel for the same reason. A plug-in buys petrol *and*
+# electricity, which is why it is handled by legs rather than by a single kind.
 FUEL_KIND = {
     FuelType.petrol: FuelKind.petrol_95,
     FuelType.diesel: FuelKind.diesel,
     FuelType.hybrid: FuelKind.petrol_95,
+    FuelType.plugin_hybrid: FuelKind.petrol_95,
 }
+
+# What a plug-in does when nobody has said. Deliberately conservative: the
+# official figures assume it is charged before nearly every journey, which is
+# how a two-tonne saloon comes to be quoted at 1.6 L/100km. Half is closer to
+# what fleets actually observe, and the number is shown and editable so nobody
+# has to accept it.
+DEFAULT_ELECTRIC_SHARE_PCT = 50.0
+
+
+@dataclass
+class Leg:
+    """One thing a car buys, and how much of it per 100 km.
+
+    Every car has one of these except a plug-in hybrid, which has two. Costing
+    and emissions both walk the list, so the two-fuel case needs no special
+    path — it just has a longer list.
+    """
+
+    rate: float
+    electric: bool
+    label: str
+
+
+def legs_for(vehicle: Vehicle, rate: float | None = None) -> list[Leg]:
+    """How a car's consumption breaks down by what it buys.
+
+    `rate` overrides the single-fuel figure, which is how the measured-versus
+    -quoted slider reaches this. A plug-in is split by its electric share, so
+    the override applies proportionally rather than to one half.
+    """
+    if vehicle.fuel_type == FuelType.plugin_hybrid:
+        share = (
+            vehicle.electric_share_pct
+            if vehicle.electric_share_pct is not None
+            else DEFAULT_ELECTRIC_SHARE_PCT
+        ) / 100.0
+        kwh = vehicle.consumption_kwh_per_100km or 0.0
+        litres = vehicle.fuel_consumption_l_per_100km or 0.0
+        return [
+            Leg(rate=kwh * share, electric=True, label="kWh"),
+            Leg(rate=litres * (1 - share), electric=False, label="L"),
+        ]
+
+    quoted, unit, label, _ = quoted_consumption(vehicle)
+    return [Leg(rate=rate if rate is not None else (quoted or 0.0),
+                electric=unit == "kwh", label=label)]
 
 
 class CannotCompare(ValueError):

@@ -65,6 +65,12 @@ class CatalogVehicle(Base, TimestampMixin):
     # A third benchmark to hold your measured efficiency against.
     consumption_real_world_kwh_100km: Mapped[float | None] = mapped_column(Float)
 
+    # How much of a plug-in hybrid's driving the source assumes is electric.
+    # The official figures assume it is plugged in constantly, which is why
+    # they flatter it; carried so the picker can prefill something and the
+    # person can correct it.
+    electric_share_pct: Mapped[float | None] = mapped_column(Float)
+
     # Combustion
     engine_size_cc: Mapped[int | None] = mapped_column(Integer)
     fuel_consumption_l_per_100km: Mapped[float | None] = mapped_column(Float)

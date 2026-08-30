@@ -6,10 +6,27 @@ from app.models.base import Base, TimestampMixin
 
 
 class FuelType(str, enum.Enum):
+    """What a car buys, which is not quite the same as what it is.
+
+    `hybrid` is the self-charging kind: it has a battery and a motor, it never
+    plugs in, and every kilometre it travels was ultimately paid for at a pump.
+    So it buys petrol, and its hybrid-ness shows up as a better L/100km rather
+    than as a second fuel. A mild hybrid is the same story with a smaller
+    battery, and a diesel one buys diesel — which is why those are recorded as
+    plain diesel rather than as a hybrid that would be priced at petrol rates.
+
+    `plugin_hybrid` is genuinely two cars. It draws from the grid and from a
+    pump, in a proportion that depends on how often someone bothers to plug it
+    in — which is why it needs a figure for each and a share between them, and
+    why lumping it in with the self-charging sort got its running cost wrong in
+    whichever direction that person actually drives.
+    """
+
     electric = "electric"
     petrol = "petrol"
     diesel = "diesel"
     hybrid = "hybrid"
+    plugin_hybrid = "plugin_hybrid"
 
 
 class Transmission(str, enum.Enum):
@@ -49,6 +66,15 @@ class Vehicle(Base, TimestampMixin):
     wltp_range_km: Mapped[float | None] = mapped_column(Float)
     # Quoted consumption, used to price this car as a hypothetical alternative.
     consumption_kwh_per_100km: Mapped[float | None] = mapped_column(Float)
+
+    # How much of a plug-in hybrid's driving is done on the battery. Null for
+    # everything else, where the question does not arise.
+    #
+    # There is no honest default: a plug-in charged nightly and driven to the
+    # shops is nearly an EV, and the same car never plugged in is a heavy
+    # petrol one. The official figures assume the former, which is why they
+    # flatter it so badly, so this is asked rather than assumed.
+    electric_share_pct: Mapped[float | None] = mapped_column(Float)
 
     # Liquid-fuel side, mirroring the two above: tank capacity turns a tank
     # percentage into litres, and the quoted figure prices the car hypothetically.

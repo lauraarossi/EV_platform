@@ -643,3 +643,73 @@ def test_the_shared_price_still_wins_when_both_burn_the_same_thing(db):
     ], my_other_petrol, driven_vehicle=mine, alternative_unit_price=1.42)
 
     assert result.intervals[0].unit_price == pytest.approx(2.00)   # 120 / 60, shared
+
+
+# --- hybrids, of which there are two kinds ------------------------------------
+
+def test_a_self_charging_hybrid_buys_only_petrol(db):
+    """It has a battery and a motor and never plugs in, so every kilometre was
+    paid for at a pump. Its hybrid-ness is already in the L/100km."""
+    from app.services.comparison import legs_for
+
+    hev = car(db, make="Toyota", model="Yaris Cross", fuel_type=FuelType.hybrid,
+              fuel_consumption_l_per_100km=4.5)
+    legs = legs_for(hev)
+
+    assert len(legs) == 1
+    assert legs[0].electric is False
+    assert legs[0].rate == 4.5
+
+
+def test_a_plug_in_buys_both(db):
+    """The distinction that matters: it draws from the grid as well as a pump,
+    in whatever proportion it actually gets charged."""
+    from app.services.comparison import legs_for
+
+    phev = car(db, make="Toyota", model="RAV4", fuel_type=FuelType.plugin_hybrid,
+               consumption_kwh_per_100km=18.0, fuel_consumption_l_per_100km=6.0,
+               electric_share_pct=60)
+    electric, liquid = legs_for(phev)
+
+    assert electric.electric is True
+    assert electric.rate == pytest.approx(10.8)     # 18 over 60% of the distance
+    assert liquid.rate == pytest.approx(2.4)        # 6 over the other 40%
+
+
+def test_the_share_is_what_moves_a_plug_in(db):
+    """Charged nightly it is nearly an EV; never charged it is a heavy petrol
+    car. Same vehicle, and the official figures assume the first."""
+    from app.services.comparison import legs_for
+
+    def rates(share):
+        v = car(db, fuel_type=FuelType.plugin_hybrid, consumption_kwh_per_100km=20.0,
+                fuel_consumption_l_per_100km=7.0, electric_share_pct=share)
+        return {leg.label: leg.rate for leg in legs_for(v)}
+
+    diligent = rates(90)
+    never = rates(0)
+
+    assert diligent["kWh"] == pytest.approx(18.0) and diligent["L"] == pytest.approx(0.7)
+    assert never["kWh"] == pytest.approx(0.0) and never["L"] == pytest.approx(7.0)
+
+
+def test_an_unstated_share_is_assumed_conservatively(db):
+    """Not the official assumption, which is that it is charged before nearly
+    every journey — that is how a two-tonne saloon gets quoted at 1.6 L/100km."""
+    from app.services.comparison import DEFAULT_ELECTRIC_SHARE_PCT, legs_for
+
+    v = car(db, fuel_type=FuelType.plugin_hybrid, consumption_kwh_per_100km=20.0,
+            fuel_consumption_l_per_100km=6.0)
+    electric, liquid = legs_for(v)
+
+    assert DEFAULT_ELECTRIC_SHARE_PCT == 50.0
+    assert electric.rate == pytest.approx(10.0)
+    assert liquid.rate == pytest.approx(3.0)
+
+
+def test_the_measured_figure_still_reaches_a_single_fuel_car(db):
+    """The slider overrides the one rate a normal car has."""
+    from app.services.comparison import legs_for
+
+    v = petrol(db, 6.0)
+    assert legs_for(v, rate=9.0)[0].rate == 9.0
