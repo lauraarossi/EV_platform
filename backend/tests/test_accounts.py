@@ -265,13 +265,24 @@ def test_google_sign_in_grants_the_admin_role(client, db, monkeypatch):
         ("get", "/api/v1/vehicles/"),
         ("get", "/api/v1/fuel-events/"),
         ("get", "/api/v1/tariffs/"),
-        ("get", "/api/v1/catalog/makes"),
         ("get", "/api/v1/fuel-prices/"),
         ("get", "/api/v1/stats/vehicles/1/summary"),
     ],
 )
 def test_signed_out_callers_are_refused(client, method, path):
+    """Anything holding somebody's own data. Note what is not on this list."""
     assert getattr(client, method)(path).status_code == 401
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/api/v1/catalog/makes", "/api/v1/public/prices", "/api/v1/health"],
+)
+def test_what_is_deliberately_open(client, path):
+    """Reference data and the tools that use it. Choosing a car is the first
+    thing anyone does, and asking them to sign up before they can is how they
+    leave — none of it is anyone's personal data."""
+    assert client.get(path).status_code == 200
 
 
 def test_health_stays_open(client):

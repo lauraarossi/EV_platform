@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends
 from app.api.v1.endpoints import (
     admin,
     feedback,
+    public,
     auth,
     health,
     vehicles,
@@ -22,6 +23,12 @@ router.include_router(health.router)
 router.include_router(auth.router)
 # Open too: the people most worth hearing from have not signed up yet.
 router.include_router(feedback.router)
+# The tools without an account: stateless, and the only pages a crawler reaches.
+router.include_router(public.router)
+# Third-party reference data, read-only, and the first thing anyone touches:
+# choosing a car is step one, so the picker has to work before signing in. The
+# imports that write to it live behind the admin role, not here.
+router.include_router(catalog.router)
 
 # Everything else requires an account. Vehicle, fuel-event, stats and tariff
 # endpoints also scope their queries to the caller — this only gates the door.
@@ -34,7 +41,6 @@ router.include_router(tariffs.router)
 # it still needs a signed-in caller.
 signed_in = [Depends(get_current_user)]
 router.include_router(fuel_prices.router, dependencies=signed_in)
-router.include_router(catalog.router, dependencies=signed_in)
 router.include_router(currency.router, dependencies=signed_in)
 
 # Admin only, enforced on the router itself rather than route by route. Every
